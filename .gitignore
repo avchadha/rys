@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.Zone.Identifier
+*:Zone.Identifier
+BOS14-Dev-VPN-avchadha.conf
+BOS14-Dev-VPN-avchadha.conf:Zone.Identifier
+.claude/

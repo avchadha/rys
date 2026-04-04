@@ -1,0 +1,768 @@
+EXPERIMENT STRUCTURE DECISIONS
+==============================
+RYS (Repeat Yourself) Layer-Duplication Experiment on EVA-CLIP-18B
+Every design choice, what was chosen, and why.
+
+
+================================================================================
+1. MODEL SELECTION
+================================================================================
+
+DECISION: EVA-CLIP-18B vision encoder (~17.5B params, 48 transformer layers)
+ALTERNATIVES CONSIDERED:
+  - DINOv2-large (~300M params, 24 layers): initial choice
+  - InternViT-6B (~5.9B params, 45 layers): second iteration
+  - InternVL 78B: considered but not a pure vision encoder
+  - Other large ViTs
+
+WHY EVA-CLIP-18B:
+  - It is the largest publicly available pure Vision Transformer. The user
+    explicitly wanted maximum parameters ("let's go for the biggest one lmao").
+  - At 17.5B params and 48 layers, there is ample depth for the kind of
+    functional circuit structure that the original RYS work found in LLMs.
+    More layers = more possible (i,j) configs = richer heatmap.
+  - It is a pure ViT architecture (not a hybrid or multimodal fusion model),
+    which keeps the experiment clean — we are testing whether vision
+    transformers have the same layer-duplication properties as LLMs.
+  - Uses standard transformer conventions (encoder.layers, embeddings,
+    CLS token at position 0) that our model-agnostic scanner handles
+    natively without custom callables.
+  - Trained with CLIP contrastive objective, which produces strong visual
+    representations suitable for probing.
+
+WHY NOT DINOv2-large:
+  - Only 300M params and 24 layers. Too small to make a compelling comparison
+    with the multi-billion-parameter LLMs in the original RYS work. Only 300
+    valid configs vs 1176 for EVA-CLIP-18B.
+
+WHY NOT InternViT-6B:
+  - 5.9B params is substantial, but EVA-CLIP-18B is 3x larger with 3 more
+    layers. Since compute was not a constraint (user has top-tier GPUs),
+    there was no reason not to go bigger.
+
+WHY NOT InternVL 78B:
+  - Not a pure vision encoder — it is a multimodal model with a language
+    component. Duplicating layers in a vision-language model confounds the
+    experiment because we cannot attribute effects purely to vision processing.
+
+
+================================================================================
+2. LAYER DUPLICATION TECHNIQUE
+================================================================================
+
+DECISION: For config (i, j), run all blocks 0..j-1 normally, then re-run
+blocks i..j-1 (the duplication), then continue blocks j..end. No weights
+are modified. CLS token is extracted from position 0 of the final hidden state.
+
+ALTERNATIVES CONSIDERED:
+  - Duplicating individual layers one at a time
+  - Duplicating non-contiguous sets of layers
+  - Modifying layer weights or adding skip connections
+  - Using attention head pruning/duplication instead of whole layers
+
+WHY THIS APPROACH:
+  - This is exactly the technique from the original RYS blog post. The entire
+    point of this experiment is to test whether the RYS finding (that LLMs
+    have indivisible middle-layer circuits that benefit from duplication)
+    transfers to vision transformers. Using a different duplication technique
+    would make the comparison meaningless.
+  - Contiguous block duplication tests the hypothesis that transformers
+    develop functional "circuits" spanning multiple consecutive layers.
+  - No weight modification means we are probing the model's existing
+    computational structure, not training or fine-tuning anything.
+  - The (i, j) parameterization produces an upper-triangular heatmap that
+    is directly comparable to the RYS blog post's visualizations.
+
+
+================================================================================
+3. CONFIG ENUMERATION
+================================================================================
+
+DECISION: Scan ALL 1176 valid (i, j) pairs where 0 <= i < j <= 48.
+No coarse grid, no sampling, no shortcuts.
+
+ALTERNATIVES CONSIDERED:
+  - Coarse grid (e.g., step size 2 or 4) to reduce compute
+  - Random sampling of configs
+  - Only scanning "interesting" regions (e.g., middle layers)
+
+WHY EXHAUSTIVE:
+  - The user explicitly wanted rigorous results — no coarse grid.
+  - With the cache optimization (see below), scanning all 1176 configs is
+    tractable. The bottleneck is feature extraction, not config evaluation.
+  - An exhaustive scan produces a complete heatmap with no interpolation
+    artifacts. Any structure in the results (e.g., a contiguous "circuit"
+    region) is real, not an artifact of sampling.
+  - A coarse grid could miss narrow but significant structure. If there is
+    a 2-layer circuit that helps, a step-4 grid would miss it entirely.
+
+
+================================================================================
+4. CACHE OPTIMIZATION
+================================================================================
+
+DECISION: cache_baseline_states() caches all 49 intermediate hidden states
+(embedding output + after each of 48 layers) in one forward pass.
+run_config_from_cache() starts from cached[j] and runs only the duplication
+(layers i..j-1) + continuation (layers j..end), avoiding redundant computation.
+
+ALTERNATIVES CONSIDERED:
+  - Naive approach: run full forward pass (0..j..duplicate..end) for each config
+  - Hook-based approach: register forward hooks to intercept and replay
+
+WHY CACHING:
+  - Without caching, each of the 1176 configs requires a full forward pass
+    through all 48 layers plus the duplicated layers. With caching, we do
+    one forward pass to get all 49 states, then each config only runs the
+    layers from i onward (duplication + continuation).
+  - For config (i, j), the naive approach runs j + (j-i) + (48-j) = 48 + (j-i)
+    layers. The cached approach runs (j-i) + (48-j) = 48-i layers, saving
+    i layers of computation per config. For configs where i is large, this
+    is a major speedup.
+  - The cache is built once per batch of images, then reused across all configs
+    in that batch. This is critical for the config-batched scanning strategy.
+  - Hooks were considered but are fragile with custom model architectures
+    (EVA-CLIP-18B uses trust_remote_code=True), and the explicit caching
+    approach is more transparent and debuggable.
+
+
+================================================================================
+5. PROBE METHODOLOGY: NEAREST-CENTROID CLASSIFICATION
+================================================================================
+
+DECISION: Nearest-centroid classification using cosine similarity. No training
+of any kind. 5 reference images per class define class centroids. 50 "hard"
+test images selected by lowest cosine similarity margin on the baseline model.
+Metrics: top-1 accuracy and mean reciprocal rank (MRR).
+
+ALTERNATIVES CONSIDERED:
+  - Linear probe (logistic regression on frozen features)
+  - k-NN classification
+  - Full fine-tuning
+  - Direct model output comparison (e.g., loss on masked patches)
+
+WHY NEAREST-CENTROID:
+  - This matches the original RYS blog post methodology. The RYS authors
+    used lightweight probes that require no training, and we follow suit
+    for a direct comparison.
+  - Zero training means the probe cannot compensate for or mask changes
+    in representation quality. If layer duplication degrades the embedding
+    space, the probe will immediately show it. A trained linear probe could
+    partially adapt to a degraded embedding, hiding the effect.
+  - Cosine similarity is the natural metric for CLIP-style models, which are
+    trained with contrastive objectives that optimize embedding directions.
+  - The probe is extremely fast to evaluate (just matrix multiplications),
+    which matters when scoring 1176 configs x 11 datasets.
+
+WHY NOT LINEAR PROBE:
+  - Training a logistic regression for each of 1176 configs x 11 datasets
+    would be much slower and would introduce training variance.
+  - A linear probe can partially compensate for representation degradation,
+    which weakens the signal we are looking for.
+  - The original RYS work used training-free probes, and deviating would
+    make comparison harder.
+
+WHY NOT k-NN:
+  - With only 5 reference images per class, k-NN with k>1 is unreliable.
+    Nearest-centroid (which is effectively 1-NN to the class mean) is more
+    stable with very few reference images.
+
+WHY 5 REFERENCES PER CLASS:
+  - Small enough to keep feature extraction fast, large enough to produce
+    a stable centroid estimate. Matches the "few-shot" spirit of the RYS
+    probes. With 1000 classes (ImageNet), this is 5000 reference images
+    total — tractable but sufficient.
+
+WHY 50 HARD TEST IMAGES:
+  - Selected by lowest cosine similarity margin (sim to correct class minus
+    sim to best incorrect class) on the baseline model. These are the images
+    the baseline model is least confident about.
+  - Hard images amplify the signal: if layer duplication helps, the
+    improvement will be most visible on images that were borderline.
+    Easy images (high margin) would show ceiling effects.
+  - 50 is enough for statistical signal while keeping per-config evaluation
+    fast. The original RYS blog post also used small, carefully selected
+    probe sets rather than massive test sets.
+
+
+================================================================================
+6. METRICS: ACCURACY AND MRR
+================================================================================
+
+DECISION: Report both top-1 accuracy and mean reciprocal rank (MRR).
+
+ALTERNATIVES CONSIDERED:
+  - Accuracy only
+  - Top-5 accuracy
+  - Raw cosine similarity scores
+  - Loss-based metrics
+
+WHY BOTH ACCURACY AND MRR:
+  - Accuracy measures whether the correct class is ranked first. MRR gives
+    credit for partial answers — if the correct class is ranked 2nd instead
+    of 50th, MRR reflects that improvement even though accuracy does not.
+  - This matches the original RYS blog post, which used metrics that capture
+    both exact correctness and "almost correct" improvements.
+  - MRR is more sensitive to small changes in representation quality,
+    especially on hard images where the correct class might move from rank 3
+    to rank 1. Accuracy alone would miss the rank 5 → rank 2 improvement.
+  - The combination tells a fuller story: accuracy shows practical
+    classification improvement, MRR shows whether the embedding space is
+    becoming more structured even when it doesn't flip the top prediction.
+
+
+================================================================================
+7. DATASET SELECTION: REAL-WORLD DATASETS
+================================================================================
+
+DECISION: 6 real-world datasets:
+  - ImageNet-1K (1000 classes): general object classification
+  - DTD (47 classes): texture recognition
+  - EuroSAT (10 classes): satellite land use classification
+  - Places365 (365 classes): scene recognition
+  - Stanford 40 Actions (40 classes): human action recognition
+  - FGVC Aircraft (100 classes): fine-grained viewpoint/3D structure
+
+ALTERNATIVES CONSIDERED (originally included, then removed):
+  - CIFAR-100: replaced by ImageNet (superset, higher resolution, more classes)
+  - Food-101: fine-grained classification of natural photos (redundant)
+  - Oxford Pets: fine-grained classification of natural photos (redundant)
+  - Flowers-102: fine-grained classification of natural photos (redundant)
+  - CLEVR: replaced by custom synthetic probes (more control over confounds)
+
+WHY THESE 6:
+  Each tests a distinct visual domain and cognitive operation, minimizing
+  redundancy:
+
+  ImageNet: The gold standard for object classification. 1000 classes spanning
+  a huge range of visual concepts. Provides a broad, general-purpose signal.
+  Chosen over CIFAR-100 because it is the canonical benchmark, has higher
+  resolution images, and more classes.
+
+  DTD (Describable Textures Database): Tests texture perception — recognizing
+  materials and surface patterns (e.g., "bumpy", "woven", "striped"). This is
+  fundamentally different from object recognition: there are no discrete objects,
+  just spatial patterns. Tests whether mid-level texture features are affected
+  by layer duplication.
+
+  EuroSAT: Satellite imagery of land use (e.g., "forest", "river", "highway").
+  Tests a completely different image domain — overhead aerial views with no
+  standard "objects." The visual statistics (color distribution, spatial
+  frequency) are very different from natural photos.
+
+  Places365: Scene recognition — classifying the overall scene type (e.g.,
+  "kitchen", "beach", "highway"). Unlike object classification, this requires
+  understanding spatial layout, context, and the combination of many elements.
+  Tests holistic scene understanding rather than object-level features.
+
+  Stanford 40 Actions: Recognizing human actions from still images (e.g.,
+  "riding a horse", "playing guitar"). Requires understanding pose, object
+  interactions, and context simultaneously. Tests compositional visual
+  reasoning.
+
+  FGVC Aircraft: Fine-grained classification of aircraft variants by
+  viewpoint and structural details. Tests whether the model can discriminate
+  subtle 3D structural differences — a fundamentally different challenge from
+  recognizing different object categories.
+
+WHY THE ORIGINAL 3 WERE REMOVED:
+  The user identified that Food-101, Oxford Pets, and Flowers-102 are all
+  "fine-grained classification of natural photos" — they test the exact same
+  cognitive operation (discriminate similar-looking natural objects) on the
+  exact same image domain (close-up photos of things). Having 3 datasets that
+  test the same thing adds data but not insight. The replacement datasets
+  each probe a genuinely different visual capability.
+
+
+================================================================================
+8. DATASET SELECTION: SYNTHETIC REASONING PROBES
+================================================================================
+
+DECISION: 5 custom synthetic probe datasets, each isolating a specific visual
+cognitive operation:
+  - Counting (10 classes): numerosity perception
+  - Same/Different (2 classes): relational identity comparison
+  - Spatial Relation (4 classes): spatial reasoning (above/below/left/right)
+  - Symmetry (2 classes): global structure perception
+  - Inside/Outside (2 classes): topological reasoning
+
+ALTERNATIVES CONSIDERED:
+  - Using only real-world datasets
+  - Using CLEVR (existing synthetic dataset)
+  - Using more/fewer synthetic probes
+
+WHY SYNTHETIC PROBES AT ALL:
+  The original RYS blog post used fundamentally different types of probes —
+  math problems and EQ-Bench tested completely different "reasoning organs."
+  The user identified that all 6 real-world datasets, despite testing different
+  visual domains, all test the same underlying cognitive operation: "classify
+  this image." We needed probes that test different types of visual reasoning,
+  analogous to how the RYS authors tested different types of language reasoning.
+
+  The key insight: the RYS finding was about functional circuits — contiguous
+  layer blocks that handle specific types of computation. To find analogous
+  circuits in a vision model, we need probes that isolate specific
+  computational operations (counting, spatial reasoning, symmetry detection),
+  not just different visual domains.
+
+WHY THESE 5 SPECIFIC PROBES:
+
+  Counting: Tests numerosity perception — the ability to judge "how many."
+  This is a genuinely different computation from classification. The model must
+  segment individual elements and enumerate them, not just recognize a pattern.
+  10 classes (1-10 dots).
+
+  Same/Different: Tests relational identity — comparing two shapes and judging
+  whether they are the same. This requires abstract shape comparison, not
+  object recognition. The model must extract shape identity invariant to color,
+  position, and slight rotation. Confound: colors always differ, vertex counts
+  match, "same" pairs have slight rotation to prevent pixel matching.
+
+  Spatial Relation: Tests spatial reasoning — understanding where one object
+  is relative to another. This is a relational computation over spatial
+  positions, not a feature extraction task. Confound: reference position is
+  jittered so absolute target position alone does not determine the label;
+  cross-axis noise added.
+
+  Symmetry: Tests global structure perception — detecting vertical symmetry
+  in random dot patterns. Requires integrating information across the entire
+  image and comparing the two halves, a fundamentally holistic computation.
+  Confound: asymmetric images have the same number of dots per half, so
+  density alone is not diagnostic.
+
+  Inside/Outside: Tests topological reasoning — determining if a point is
+  inside or outside a closed contour. This is a classic cognitive challenge
+  that requires tracing the boundary and computing enclosure, not just
+  recognizing shapes. Uses ray-casting for ground truth. Confound: contours
+  are irregular polygons so the model cannot use simple convex hull heuristics.
+
+WHY NOT CLEVR:
+  CLEVR was initially considered but replaced by custom probes because:
+  (a) CLEVR requires downloading a large dataset, and the user wanted minimal
+  manual download steps; (b) CLEVR tests multiple operations at once (counting,
+  color, shape, spatial) in a single question format designed for VQA models,
+  not pure vision encoders; (c) our custom probes give us complete control
+  over confounds and can each isolate exactly one cognitive operation.
+
+WHY PROCEDURAL GENERATION:
+  - No download required — images are generated on-the-fly from stored
+    parameters (seed-deterministic). This is important because the user wanted
+    the experiment to be as self-contained as possible.
+  - Complete control over confounds. Every synthetic probe has specific
+    confound controls documented in its class docstring. We know exactly
+    what shortcuts the model could exploit, and we block them.
+  - Different seeds for train/test splits ensure no data leakage while
+    maintaining reproducibility.
+  - Generated at 448x448 resolution, then resized/cropped to model input
+    size (224x224) by the standard transform pipeline.
+
+
+================================================================================
+9. CONFOUND CONTROLS IN SYNTHETIC PROBES
+================================================================================
+
+DECISION: Each synthetic probe has specific confound controls to prevent the
+model from solving the task through unintended shortcuts.
+
+  Counting: Dot sizes are randomized (radius 12-40px) so total filled area
+  does not correlate perfectly with count. Background colors vary.
+
+  Same/Different: Colors always differ between left and right shapes regardless
+  of same/different label, so the model cannot use color matching. "Same"
+  pairs use slight rotation (±0.3 rad) so the model must do abstract shape
+  comparison, not pixel-level template matching. "Different" pairs use the
+  same vertex count as the reference shape, so vertex count is not diagnostic.
+
+  Spatial Relation: Reference position is jittered (±70px from center) so
+  absolute target position alone does not determine the label. Cross-axis
+  noise (±25px) is added so the target is not perfectly aligned on one axis.
+
+  Symmetry: Asymmetric images have the same number of dots per half as
+  symmetric images, controlling for density and total visual area.
+
+  Inside/Outside: Contours are irregular polygons (6-12 vertices with
+  randomized radii 0.6-1.0x), not circles or convex shapes. Ray-casting
+  algorithm provides ground truth for irregular boundaries. This prevents
+  the model from using simple distance-from-center heuristics.
+
+WHY THIS MATTERS:
+  Without confound controls, a model could "cheat" — e.g., counting by total
+  area instead of enumerating objects, or detecting symmetry by average
+  brightness difference between halves. Confound controls ensure that
+  measured performance reflects the target cognitive operation, not a shortcut.
+  This is critical for interpreting which layer blocks are responsible for
+  which computations.
+
+
+================================================================================
+10. TWO-PHASE SCAN ARCHITECTURE
+================================================================================
+
+DECISION: The scan runs in two phases:
+  Phase 1: Build probe sets (select reference images, extract baseline features,
+           compute centroids, select hard test images)
+  Phase 2: Evaluate all 1176 configs per dataset via cached feature extraction
+           and nearest-centroid scoring
+
+ALTERNATIVES CONSIDERED:
+  - Single-phase approach (extract features and evaluate in one pass)
+  - Pre-compute all features for all configs, then evaluate
+
+WHY TWO PHASES:
+  - Phase 1 establishes the probe sets that Phase 2 will use. Hard image
+    selection depends on baseline features, so it must happen first.
+  - Separating the phases makes the code clearer and makes resume logic
+    simpler — if Phase 1 completes but Phase 2 crashes, we don't need to
+    redo the probe selection.
+  - Phase 2 processes configs in batches (--config-batch-size, default 50)
+    to balance memory usage against number of passes through the data.
+    Each batch builds a cache, evaluates all configs in that batch, then
+    frees memory.
+
+
+================================================================================
+11. CONFIG BATCHING STRATEGY
+================================================================================
+
+DECISION: Configs are processed in groups of --config-batch-size (default 50).
+For each group, one cache is built and all configs in the group are evaluated
+from it. Results are saved to disk after each group.
+
+ALTERNATIVES CONSIDERED:
+  - Process all 1176 configs in a single cache pass
+  - Process one config at a time
+
+WHY BATCHING:
+  - Processing all 1176 configs from a single cache would require holding
+    1176 sets of features in memory simultaneously (in extract_features_for_configs).
+    With 50 hard test images x 5120-dim embeddings x 1176 configs, that is
+    ~1.2GB of float32 features just for test images. Batching keeps memory
+    bounded.
+  - Processing one config at a time would require rebuilding the cache for
+    every single config, negating the speedup of caching.
+  - Saving results after each group provides crash resilience — the --resume
+    flag can pick up from the last completed group.
+  - The default of 50 configs per group is a balance: small enough to fit in
+    memory, large enough to amortize the cost of building the cache.
+
+
+================================================================================
+12. RESUME SUPPORT
+================================================================================
+
+DECISION: The scan supports --resume to continue from partial results.
+Per-dataset accuracy and MRR matrices are saved as .npy files after each
+config group. Baseline results are saved incrementally to baseline_results.json.
+On resume, completed datasets are skipped entirely, and partially completed
+datasets resume from the first incomplete config group.
+
+WHY:
+  - Scanning 1176 configs x 11 datasets on a 17.5B parameter model takes
+    hours. Any crash (OOM, node preemption, network failure) would lose all
+    progress without resume support.
+  - Incremental saving of baseline_results.json was added after identifying
+    a bug where baseline results were only saved at the very end — a crash
+    during Phase 2 would lose all baseline data.
+
+
+================================================================================
+13. MODEL-AGNOSTIC SCANNER DESIGN
+================================================================================
+
+DECISION: The RYSScanner class is parameterized by three callables:
+  - get_layers(model) -> list of transformer blocks
+  - embed_fn(model, inputs) -> initial hidden states
+  - pool_fn(hidden_states) -> pooled embedding
+Defaults work for EVA-CLIP-18B (and InternViT-6B).
+
+ALTERNATIVES CONSIDERED:
+  - Hardcoded scanner for each specific model
+  - Subclass-based approach (one scanner class per model)
+  - Config file / registry approach
+
+WHY THREE CALLABLES:
+  - The user explicitly asked whether the framework could work with other
+    models (e.g., InternVL 78B). Three callables capture the only three
+    things that vary across transformer architectures: how to get the layer
+    list, how to compute initial embeddings, and how to pool the output.
+  - Lambda defaults keep the common case (EVA-CLIP-18B, InternViT-6B) clean
+    with zero configuration, while allowing any model to be supported by
+    passing three short functions.
+  - This is simpler than subclassing (which would require a new class per
+    model) and more flexible than a config file (which cannot express
+    arbitrary computation).
+  - The scanner correctly handles models where num_layers differs — all
+    config enumeration is derived from len(get_layers(model)), not hardcoded.
+
+DTYPE DETECTION:
+  Uses getattr(model, "dtype", next(model.parameters()).dtype) because
+  EVA-CLIP-18B's extracted vision submodule is a plain nn.Module without
+  a .dtype attribute. This ensures float16 inference works correctly
+  regardless of model wrapper.
+
+
+================================================================================
+14. BASELINE CONSISTENCY
+================================================================================
+
+DECISION: get_baseline_embeddings() uses the same manual forward path as
+cache_baseline_states() — iterating through layers and taking CLS at
+position 0. It does NOT use model(x).pooler_output.
+
+ALTERNATIVES CONSIDERED:
+  - Using the model's built-in forward() method for baseline
+  - Using model.pooler_output or model.last_hidden_state
+
+WHY MANUAL FORWARD:
+  - Early in development, there was an inconsistency: baseline used
+    model(x).pooler_output (which applies layernorm + pooler head) while
+    config evaluation used cached[-1][:, 0] (raw CLS token without
+    layernorm/pooler). This meant baseline and config features were in
+    different representation spaces, making delta comparisons meaningless.
+  - By using the same manual forward path everywhere (embeddings → layers →
+    CLS at position 0), we guarantee that the only difference between
+    baseline and config features is the layer duplication itself. No
+    layernorm or pooler head artifacts.
+
+
+================================================================================
+15. HEATMAP VISUALIZATION
+================================================================================
+
+DECISION: Upper-triangular heatmaps with:
+  - X-axis: j (end layer, exclusive)
+  - Y-axis: i (start layer)
+  - Color: RdBu_r colormap (red = improvement, blue = degradation)
+  - Symmetric color range centered at 0
+  - Top-5 best configs annotated with coordinates and percentage
+  - Per-dataset heatmaps (accuracy + MRR) AND aggregated heatmaps
+  - Saved at 150 DPI
+
+ALTERNATIVES CONSIDERED:
+  - Full matrix (but lower-triangle is undefined for i >= j)
+  - Separate improvement/degradation plots
+  - 3D surface plots
+  - Only aggregated heatmaps (no per-dataset)
+
+WHY THIS DESIGN:
+  - Upper-triangular layout is natural for (i, j) where i < j, and directly
+    matches the heatmaps in the original RYS blog post. This makes visual
+    comparison with the LLM results immediate.
+  - RdBu_r (diverging colormap centered at 0) is the standard choice for
+    showing improvement vs degradation. Red for improvement, blue for
+    degradation, white for no change.
+  - Per-dataset heatmaps reveal whether different visual tasks have different
+    circuit structure (e.g., maybe counting benefits from duplicating layers
+    20-30 while texture recognition benefits from layers 5-15). The
+    aggregated heatmap shows the overall pattern.
+  - Top-5 annotations make the key results immediately visible without
+    having to cross-reference tables.
+
+
+================================================================================
+16. AGGREGATION STRATEGY
+================================================================================
+
+DECISION: Aggregated metrics are computed as the mean of per-dataset deltas
+(config accuracy minus baseline accuracy) across all datasets.
+
+ALTERNATIVES CONSIDERED:
+  - Weighted average (e.g., by number of classes or dataset difficulty)
+  - Median instead of mean
+  - Separate aggregation for real-world vs synthetic probes
+
+WHY UNWEIGHTED MEAN:
+  - Each dataset is treated as an equally important probe. Weighting by
+    number of classes would overweight ImageNet (1000 classes) and
+    underweight the binary probes (2 classes), but each probe tests a
+    different cognitive operation that we care about equally.
+  - Using deltas (rather than absolute accuracy) before averaging ensures
+    that datasets with high baseline accuracy (easy tasks) do not dominate
+    the aggregate. A +2% improvement on a 95%-baseline dataset and a +2%
+    improvement on a 50%-baseline dataset are treated as equally meaningful.
+  - Mean rather than median because we want the aggregate to be sensitive
+    to all datasets, not just the middle ones.
+
+
+================================================================================
+17. REPORT STRUCTURE
+================================================================================
+
+DECISION: The report (scripts/report.py -> outputs/report.md) includes:
+  - Model summary (layers, params, total configs)
+  - Probe set details table (classes, reference/test counts, baselines)
+  - Top 10 configs table with per-dataset breakdowns
+  - Worst 5 configs table
+  - Key Finding section that answers "did layer duplication improve performance?"
+  - Summary statistics (mean/std/max/min delta, count of positive configs)
+  - Block size analysis (mean delta by block size j-i)
+  - Heatmap image references
+
+WHY THIS STRUCTURE:
+  - The Key Finding section directly answers the research question, which is
+    the most important thing. It explicitly states "Yes — layer duplication
+    improved performance" or "No — no config improved over baseline."
+  - Per-dataset breakdowns in the top configs table show whether improvements
+    are consistent across tasks or driven by a single dataset.
+  - Block size analysis is important because the original RYS work found that
+    circuits of 7+ layers are indivisible functional units. This section shows
+    whether a similar pattern exists in vision transformers.
+  - Worst configs are included because knowing what hurts is as informative
+    as knowing what helps. If early/late layer duplication consistently hurts,
+    that supports the "specialized endpoints" hypothesis from the RYS work.
+
+
+================================================================================
+18. IMAGENET DOWNLOAD METHOD
+================================================================================
+
+DECISION: ImageNet-1K is loaded via HuggingFace datasets
+(datasets.load_dataset("ILSVRC/imagenet-1k")), wrapped in a custom HFImageNet
+class that exposes .targets for label extraction compatibility.
+
+ALTERNATIVES CONSIDERED:
+  - Manual download from image-net.org + torchvision.datasets.ImageNet
+  - TFDS (TensorFlow Datasets)
+  - Academic Torrents
+
+WHY HUGGINGFACE:
+  - The user explicitly asked "can we add code to like tell the device to
+    download imagenet at the start of the loop?" — they wanted automatic
+    download, not manual steps.
+  - HuggingFace handles download, extraction, caching, and memory-mapped
+    loading automatically. One-time setup: accept dataset terms on the web,
+    run huggingface-cli login. After that, it just works.
+  - The torchvision.datasets.ImageNet class requires the user to manually
+    download ~150GB from image-net.org, extract it into the right directory
+    structure, and point the code at it. This is error-prone and the user
+    did not want to deal with it.
+
+WHY THE WRAPPER CLASS:
+  - HuggingFace datasets return dict items ({"image": PIL, "label": int}),
+    but our framework expects (image, label) tuples and a .targets attribute
+    for fast label extraction without loading images. The HFImageNet wrapper
+    bridges this gap with minimal code.
+
+
+================================================================================
+19. OTHER DATASET DOWNLOAD METHODS
+================================================================================
+
+DECISION: Each dataset uses the most automatic download method available:
+  - DTD, EuroSAT, FGVC Aircraft: torchvision built-in download=True
+  - Places365: torchvision download=True (small=True for 256x256 version)
+  - Stanford 40: custom auto-download from Stanford servers (tar files)
+  - Synthetic probes: procedurally generated, no download
+  - ImageNet: HuggingFace datasets
+
+WHY:
+  - Minimize manual setup steps. The user should be able to run
+    `python scripts/run_scan.py --data-dir /path` and have everything
+    download automatically.
+  - torchvision's download=True is used wherever available because it is
+    well-tested and handles checksums, extraction, etc.
+  - Stanford 40 does not have a torchvision loader, so a custom Dataset class
+    handles tar download and extraction from the official Stanford servers.
+  - Places365 uses small=True (256x256) instead of full resolution to reduce
+    download size (~30GB vs ~100GB+). Since we resize to 224x224 anyway,
+    the full resolution images would just waste disk and bandwidth.
+
+
+================================================================================
+20. INPUT RESOLUTION
+================================================================================
+
+DECISION: 224x224 input resolution.
+
+ALTERNATIVES CONSIDERED:
+  - 448x448 (InternViT-6B's native resolution, used in earlier iteration)
+  - 336x336 or other intermediate sizes
+
+WHY 224:
+  - 224x224 is EVA-CLIP-18B's native input resolution (patch size 14,
+    sequence length 257 = 16x16 patches + CLS).
+  - The earlier iteration used 448x448 for InternViT-6B, but that was
+    hardcoded and broke when switching models. The image_size parameter
+    was made configurable to prevent this.
+  - Using native resolution avoids interpolation artifacts in the patch
+    embedding and ensures the model operates in its trained regime.
+
+
+================================================================================
+21. FLOAT16 INFERENCE
+================================================================================
+
+DECISION: Model loaded and run in float16 (torch.float16).
+
+WHY:
+  - EVA-CLIP-18B has ~17.5B parameters. In float32, that would require
+    ~70GB of GPU memory just for weights. In float16, it fits in ~35GB.
+  - The model was trained in mixed precision, so float16 inference is
+    expected and does not degrade quality.
+  - low_cpu_mem_usage=True in from_pretrained() further reduces peak memory
+    during loading by loading weights shard-by-shard.
+
+
+================================================================================
+22. TEXT ENCODER DELETION
+================================================================================
+
+DECISION: Load the full CLIP model (vision + text), extract vision_model,
+then delete the full model and run gc.collect().
+
+WHY:
+  - EVA-CLIP-18B is a CLIP model with both a vision encoder (~17.5B params)
+    and a text encoder (~9B params). We only need the vision encoder.
+  - Keeping the text encoder would waste ~18GB of GPU/CPU memory for
+    parameters we never use.
+  - The text encoder plays no role in our experiment — we are probing visual
+    representations only. Deleting it has zero effect on vision encoder
+    behavior since CLIP's vision and text encoders are independent at
+    inference time (they are only connected during training via the
+    contrastive loss).
+  - gc.collect() ensures Python releases the memory immediately rather than
+    waiting for garbage collection.
+
+
+================================================================================
+23. trust_remote_code=True
+================================================================================
+
+DECISION: Load EVA-CLIP-18B with trust_remote_code=True.
+
+WHY:
+  - EVA-CLIP-18B uses a custom model implementation hosted on HuggingFace
+    (not in the transformers library). Without trust_remote_code=True, the
+    model cannot be loaded at all.
+  - This is standard practice for large research models that use custom
+    architectures (RMSNorm, custom attention patterns, etc.) not yet
+    merged into the transformers library.
+
+
+================================================================================
+24. WHAT WE DID NOT DO (AND WHY)
+================================================================================
+
+No fine-tuning or training of any kind:
+  The experiment probes the model's existing computational structure. Training
+  would modify that structure and defeat the purpose.
+
+No layer pruning or removal:
+  RYS specifically tests duplication (adding computation), not pruning
+  (removing computation). These are different experiments with different
+  hypotheses.
+
+No attention head analysis:
+  While interesting, attention head analysis is orthogonal to the RYS
+  technique. RYS operates at the block level, not the head level.
+
+No cross-model comparison in a single run:
+  The framework supports it (model-agnostic scanner), but each model run
+  produces its own complete set of results. Comparing across models is a
+  separate analysis step, not part of the scan.
+
+No statistical significance testing:
+  With deterministic probe selection (fixed seeds) and deterministic model
+  inference (no dropout, eval mode), there is no stochasticity to test.
+  Each config produces one deterministic accuracy number per dataset.
+  Variability comes from the choice of probe images, which is fixed.
