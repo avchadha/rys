@@ -11,6 +11,49 @@ design and is historical.)
 
 ---
 
+## 0. Provenance: source material and what was drawn from each
+
+The experiment adapts the RYS blog series (D. Hankins / dnhkng) to vision:
+
+- **RYS I** (https://dnhkng.github.io/posts/rys/): the core intervention —
+  brute-force scan of all contiguous-block duplication configs `(i, j)` on
+  Qwen2-72B, scored with tiny deterministic probes (16 math items, 16
+  EQ-Bench items; minimal output tokens, no LLM-as-judge), best config
+  (45, 52) improving 5/6 leaderboard benchmarks. Adopted: exact config
+  semantics; exhaustive enumeration; the small-deterministic-probe
+  philosophy (our nearest-centroid probes are its embedding-space analog);
+  the upper-triangular Δ heatmap presentation; the finding to test —
+  "reasoning circuits" of ≥7 contiguous mid-stack layers, with single-layer
+  duplication almost always harmful.
+- **RYS II** (https://dnhkng.github.io/posts/rys-ii/): generalization
+  across model families; the two-stage protocol ("small probes guided
+  search; large probes judged final candidates") adopted as our
+  sweep→confirmation design; single-layer k-repeats (their layer-10×3
+  math gain) adopted as our exploratory k∈{3,4} scan; the Pareto framing
+  (quality delta vs compute overhead) adopted as our Δ-vs-block-size
+  frontier plot. Their beam-search multi-block composition and XGBoost
+  surrogate model were considered and **not** adopted: their own results
+  show composition yields sublinear returns with contiguous blocks
+  dominating the efficiency frontier, and our 1176-config space is fully
+  enumerable, leaving nothing for a surrogate to interpolate.
+- **Sapir-Whorf post** (https://dnhkng.github.io/posts/sapir-whorf/): the
+  mechanistic explanation — 8 languages × 8 topics, per-layer-centered
+  pairwise cosine similarity showing decode→reason→encode anatomy in five
+  LLM families, middle layers organizing by content with language identity
+  stripped; duplication works there because middle-layer input and output
+  inhabit the same semantic manifold. Adopted wholesale as our anatomy
+  experiment (§7) with style↔language, shape↔topic; also adopted:
+  per-layer centering, the three-curve presentation, and the
+  registered-prediction use of anatomy relative to the sweep.
+- **github.com/dnhkng/RYS**: implementation is decoder-LLM-specific
+  (ExLlama scanning, `model.layers.*` naming, MoE handling) — nothing
+  directly reusable for a ViT encoder. Adopted: the staged pipeline shape
+  (queue → scan → analyze → judge/export), mirrored in our
+  sanity → anatomy → smoke → sweep → confirm → report runbook. Their
+  `hf_export` step (materializing a winning config as a checkpoint with
+  physically duplicated layers) is noted as future work should any config
+  survive confirmation.
+
 ## 1. Research questions and hypotheses
 
 **RQ1 (transfer).** The RYS result (dnhkng, 2024–25) showed large LLMs
@@ -73,6 +116,33 @@ similarity is the trained metric.
   intervention. (The final projection to the joint text-image space is not
   applied; post-LN CLS is the last vision-native representation.)
 
+**Why not a multimodal model (and why "bigger" VLMs don't help).** Vision-
+language models were excluded — originally InternVL-78B, later re-examined
+for Qwen2.5-VL-72B — for two reasons. (a) *Attribution:* duplicating
+vision-tower layers inside a VLM and measuring task behavior confounds the
+visual representation change with the LLM's tolerance to perturbed visual
+tokens; duplicating decoder layers is just original RYS on an LLM (dnhkng's
+Qwen2-72B result). (b) *Scale is in the wrong place:* Qwen2.5-VL-72B's
+vision encoder is a ~675M-parameter ViT (32 layers, width 1280) held
+constant across the 3B/7B/72B family — the "72B" is the language decoder —
+so as a *vision* transformer it is ~26× smaller than EVA-CLIP-18B's
+encoder. Google's ViT-22B, the only larger dense ViT ever trained, has no
+public weights.
+
+**Structural hypothesis noted in advance (ViT vs LLM phase structure).**
+An LLM plausibly needs all three phases — encode (tokens → abstractions),
+reason, decode (abstractions → token space) — because its output must
+return to the input's format. A vision *encoder's* output IS an embedding:
+there is no format to return to, so a ViT may lack a decode phase
+entirely, and any content-dominant band could extend to the final layer
+rather than closing ~15 layers before the end as in LLMs. Corollary: if
+duplication tolerance exists, it might persist through the last layers of
+a ViT — a qualitative structural difference from the LLM heatmaps worth
+checking explicitly. (The Sapir-Whorf post's observation that
+encode/decode blocks are ~15 layers each, with RYS failing on models too
+shallow to have a distinct middle, is the LLM-side baseline for this
+comparison.)
+
 ### 2.1 Second arm: DINOv3 ViT-7B/16 (objective ablation)
 
 **facebook/dinov3-vit7b16-pretrain-lvd1689m** (Meta, 2025): ~7B parameters,
@@ -107,6 +177,11 @@ reproduces the model's own `forward` to 0 ulp on a random-init config):
 - Patch pooling in the anatomy skips `num_prefix_tokens = 5` (CLS + 4
   register tokens); EVA uses 1. Set per model by the registry.
 - Gated repo (Meta license acceptance required per HF account).
+- *Honest prior, recorded before the DINOv3 anatomy runs:* DINO-family
+  patch features are known to encode style/texture richly (part of why
+  they excel at dense tasks), so a style-dominant anatomy would not be
+  shocking here either; the point of the arm is to measure rather than
+  assume, with the objective as the only changed variable.
 
 **Arm ordering and prediction registration.** The DINOv3 arm is queued to
 start automatically when the EVA arm's pipeline (sweep + confirmation +
@@ -480,7 +555,47 @@ single-layer k-repeat curves labeled "exploratory — no CIs"; anatomy
 three-curve plot (+ ceiling curve) with the content-dominant region shaded,
 and per-layer PCA panels.
 
-## 10. Known limitations (to state in the paper)
+## 10. Considered and rejected (design decisions by exclusion)
+
+- **Linear probes** (logistic regression on frozen features): a trained
+  probe can partially compensate for a degraded embedding space, masking
+  exactly the effect under study; also adds training variance and cost ×
+  1176 configs. Nearest-centroid is training-free and cannot adapt.
+  (`probes/linear_probe.py` retained in the repo but unused.)
+- **Beam-search multi-block composition / surrogate model** (RYS-II): see
+  §0 — sublinear returns in the source work; enumerable config space.
+- **Multimodal models**: see §2 — attribution confound + vision towers are
+  small even in 72B-class VLMs.
+- **Wider anatomy jitter** (e.g. ±45° rotation): would demand stronger
+  invariance but corrupts content labels themselves (a square at 45° is a
+  diamond); ±15° kills pixel matching while keeping shape identity
+  unambiguous, and the style axis — not jitter — carries the
+  appearance-variation load.
+- **Coarse config grids / sampling**: a step-4 grid would miss 2–3-layer
+  circuits entirely; exhaustive scanning makes heatmap structure
+  interpretation-free.
+- **CLEVR and additional fine-grained natural-photo datasets** (Food-101,
+  Pets, Flowers): inherited exclusions from the original plan — redundant
+  cognitive operations, weaker confound control than the custom synthetic
+  probes.
+
+## 11. Future work (recorded during design, not part of this experiment)
+
+- **Behavioral validation in a VLM**: apply the best/worst configs from
+  the encoder sweep to a VLM's vision tower (e.g. Qwen2.5-VL) and measure
+  VQA/captioning behavior — tests whether representation-level duplication
+  tolerance survives contact with a downstream consumer of the tokens, and
+  addresses limitation #1. Kept out of the present design for the
+  attribution reasons in §2.
+- **Checkpoint materialization** of any confirmed config (RYS-repo-style
+  `hf_export`), yielding a deployable duplicated-layer model.
+- **Foreground-masked anatomy pooling**: the renderer provides exact shape
+  masks; pooling only foreground patches would give a third anatomy view
+  immune to the background critique of mean-patch pooling.
+- **Natural-image anatomy stimuli** (e.g. photo/sketch/painting domains of
+  the same object classes) to complement the procedural grid.
+
+## 12. Known limitations (to state in the paper)
 
 1. Embedding-geometry probes, not behavioral ones: the original RYS scored
    generative task performance of the full model; we score representation
