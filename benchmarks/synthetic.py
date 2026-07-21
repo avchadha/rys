@@ -47,6 +47,35 @@ def _random_polygon_vertices(rng, cx, cy, radius, n_vertices):
     return vertices
 
 
+def _polygon_area(polygon):
+    """Shoelace formula."""
+    area = 0.0
+    n = len(polygon)
+    for i in range(n):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[(i + 1) % n]
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0
+
+
+def _dist_to_polygon_boundary(px, py, polygon):
+    """Minimum distance from a point to any polygon edge."""
+    best = float("inf")
+    n = len(polygon)
+    for i in range(n):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        seg_len_sq = dx * dx + dy * dy
+        if seg_len_sq == 0:
+            t = 0.0
+        else:
+            t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / seg_len_sq))
+        cx, cy = x1 + t * dx, y1 + t * dy
+        best = min(best, math.hypot(px - cx, py - cy))
+    return best
+
+
 def _point_in_polygon(px, py, polygon):
     """Ray-casting algorithm for point-in-polygon test."""
     n = len(polygon)
@@ -93,9 +122,29 @@ class CountingDataset(Dataset):
         bg = _random_color(rng)
         dots = []
         for _ in range(count):
-            r = int(rng.integers(12, 40))
-            x = int(rng.integers(r + 5, s - r - 5))
-            y = int(rng.integers(r + 5, s - r - 5))
+            # Rejection-sample so dots never overlap or touch: merged blobs
+            # would make the visible count smaller than the label.
+            for _attempt in range(200):
+                r = int(rng.integers(12, 40))
+                x = int(rng.integers(r + 5, s - r - 5))
+                y = int(rng.integers(r + 5, s - r - 5))
+                if all(
+                    (x - ox) ** 2 + (y - oy) ** 2 > (r + orad + 6) ** 2
+                    for ox, oy, orad, _ in dots
+                ):
+                    break
+                r = None
+            if r is None:
+                # Canvas too crowded with large radii — retry with small dot
+                r = 12
+                for _attempt in range(500):
+                    x = int(rng.integers(r + 5, s - r - 5))
+                    y = int(rng.integers(r + 5, s - r - 5))
+                    if all(
+                        (x - ox) ** 2 + (y - oy) ** 2 > (r + orad + 6) ** 2
+                        for ox, oy, orad, _ in dots
+                    ):
+                        break
             color = _random_color(rng)
             dots.append((x, y, r, color))
         return (bg, dots)
@@ -160,8 +209,9 @@ class SameDifferentDataset(Dataset):
         # Right shape
         right_color = _random_color(rng)
         if same:
-            # Same shape, translated + slightly rotated
-            angle = float(rng.uniform(-0.3, 0.3))
+            # Same shape, translated + rotated (wide enough that pixel/template
+            # matching fails and abstract shape comparison is required)
+            angle = float(rng.uniform(-0.6, 0.6))
             lcx = sum(v[0] for v in left_verts) / len(left_verts)
             lcy = sum(v[1] for v in left_verts) / len(left_verts)
             cos_a, sin_a = math.cos(angle), math.sin(angle)
@@ -172,10 +222,22 @@ class SameDifferentDataset(Dataset):
                 for vx, vy in left_verts
             ]
         else:
-            # Different shape, same vertex count
+            # Different shape, same vertex count — rescaled around its center
+            # to match the left shape's AREA, so total filled area is not a
+            # shortcut for same/different.
             right_verts = _random_polygon_vertices(
                 rng, s * 3 // 4, s // 2, radius, n_verts
             )
+            area_l = _polygon_area(left_verts)
+            area_r = _polygon_area(right_verts)
+            if area_r > 1e-6:
+                k = math.sqrt(area_l / area_r)
+                rcx = sum(v[0] for v in right_verts) / len(right_verts)
+                rcy = sum(v[1] for v in right_verts) / len(right_verts)
+                right_verts = [
+                    (rcx + (vx - rcx) * k, rcy + (vy - rcy) * k)
+                    for vx, vy in right_verts
+                ]
 
         return (bg, left_verts, left_color, right_verts, right_color)
 
@@ -328,14 +390,14 @@ class SymmetryDataset(Dataset):
         if symmetric:
             right_dots = [(s - x, y, r, color) for x, y, r, color in left_dots]
         else:
-            # Independent dots, same count
-            right_dots = []
-            for _ in range(n_dots):
-                x = int(rng.integers(s // 2 + 10, s - 15))
-                y = int(rng.integers(15, s - 15))
-                r = int(rng.integers(8, 22))
-                color = _random_color(rng)
-                right_dots.append((x, y, r, color))
+            # Same (y, radius, color) multiset as the mirrored left half —
+            # only the x-positions are resampled. This matches the two
+            # halves' color histograms, dot sizes, and vertical marginals,
+            # so only true spatial mirroring distinguishes the classes.
+            right_dots = [
+                (int(rng.integers(s // 2 + 10, s - 15)), y, r, color)
+                for _, y, r, color in left_dots
+            ]
 
         return (bg, left_dots, right_dots)
 
@@ -388,33 +450,51 @@ class InsideOutsideDataset(Dataset):
     def _gen_params(self, rng, inside):
         s = self.size
         bg = (240, 240, 240)
-
-        # Contour: irregular polygon near center
-        cx = s // 2 + int(rng.integers(-30, 30))
-        cy = s // 2 + int(rng.integers(-30, 30))
-        n_verts = int(rng.integers(6, 12))
-        contour_r = int(rng.integers(100, 160))
-        contour = _random_polygon_vertices(rng, cx, cy, contour_r, n_verts)
-
-        # Find a valid dot position (inside or outside as requested)
         dot_r = 12
-        found = False
-        dx, dy = s // 2, s // 2  # default (will be overwritten)
-        for _ in range(500):
-            dx = int(rng.integers(dot_r + 10, s - dot_r - 10))
-            dy = int(rng.integers(dot_r + 10, s - dot_r - 10))
-            if _point_in_polygon(dx, dy, contour) == inside:
-                found = True
-                break
+        margin = dot_r + 4 + 8  # dot radius + line half-width + slack
 
-        if not found:
-            # Fallback: place at polygon center (inside) or far corner (outside)
-            if inside:
-                dx, dy = cx, cy
-            else:
-                dx, dy = dot_r + 15, dot_r + 15
+        # A randomly generated polygon can be a thin sliver whose interior
+        # has NO margin-safe region — regenerate the contour until the dot
+        # can be placed. Placement constraints beyond the class label:
+        #   1. Boundary margin: the dot must clear the contour line by a
+        #      visible margin, so the label is never visually ambiguous
+        #      (esp. after 448 -> 224 downscaling).
+        #   2. Annulus band: the dot's distance from the polygon center
+        #      must lie in a band where BOTH classes occur (the contour
+        #      radius spans 0.6-1.0 x contour_r), so distance-from-center
+        #      is not a shortcut for inside/outside.
+        for _contour_attempt in range(50):
+            cx = s // 2 + int(rng.integers(-30, 30))
+            cy = s // 2 + int(rng.integers(-30, 30))
+            n_verts = int(rng.integers(6, 12))
+            contour_r = int(rng.integers(100, 160))
+            contour = _random_polygon_vertices(rng, cx, cy, contour_r, n_verts)
+            band_lo, band_hi = 0.45 * contour_r, 1.25 * contour_r
 
-        return (bg, contour, dx, dy, dot_r)
+            for _ in range(1000):
+                dx = int(rng.integers(dot_r + 10, s - dot_r - 10))
+                dy = int(rng.integers(dot_r + 10, s - dot_r - 10))
+                d_center = math.hypot(dx - cx, dy - cy)
+                if not (band_lo <= d_center <= band_hi):
+                    continue
+                if _dist_to_polygon_boundary(dx, dy, contour) < margin:
+                    continue
+                if _point_in_polygon(dx, dy, contour) == inside:
+                    return (bg, contour, dx, dy, dot_r)
+
+            # Annulus may be infeasible for this contour; keep the margin
+            # and label constraints and try without the band.
+            for _ in range(1000):
+                dx = int(rng.integers(dot_r + 10, s - dot_r - 10))
+                dy = int(rng.integers(dot_r + 10, s - dot_r - 10))
+                if (_dist_to_polygon_boundary(dx, dy, contour) >= margin
+                        and _point_in_polygon(dx, dy, contour) == inside):
+                    return (bg, contour, dx, dy, dot_r)
+
+        raise RuntimeError(
+            "InsideOutsideDataset: could not place a valid dot after 50 "
+            "contour regenerations — check generation parameters."
+        )
 
     def _render(self, params):
         bg, contour, dx, dy, dot_r = params

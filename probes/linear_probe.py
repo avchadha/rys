@@ -25,11 +25,12 @@ def train_linear_probe(
     """
     pipe = Pipeline([
         ("scaler", StandardScaler()),
+        # NOTE: no multi_class kwarg — deprecated in sklearn 1.5, removed in
+        # 1.7; multinomial is already the default for the lbfgs solver.
         ("clf", LogisticRegression(
             max_iter=max_iter,
             C=C,
             solver="lbfgs",
-            multi_class="multinomial",
             n_jobs=-1,
         )),
     ])

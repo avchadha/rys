@@ -1,77 +1,81 @@
-"""Verify EVA-CLIP-18B vision encoder loads correctly and produces expected outputs."""
+"""Verify the registered model loads and the scanner's forward path works.
 
-import gc
+Run this on the GPU box BEFORE launching a full scan — it exercises the
+exact embed -> layers -> pool path the scanner uses, including the
+EVA-CLIP layer-call signature fix (layers need two positional mask args).
+"""
 
-import torch
-from transformers import AutoModel, CLIPImageProcessor
-from PIL import Image
+import argparse
+import os
+import sys
+import time
+
 import numpy as np
+import torch
+from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from scripts.model_registry import load_model
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="eva18b")
+    args = parser.parse_args()
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
 
-    # Load full CLIP model, then extract vision encoder
-    model_name = "BAAI/EVA-CLIP-18B"
-    print(f"Loading {model_name}...")
-    full_model = AutoModel.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        low_cpu_mem_usage=True,
-        trust_remote_code=True,
-    )
-    processor = CLIPImageProcessor.from_pretrained(model_name)
+    scanner, processor, spec = load_model(args.model, device=device)
+    print(f"Layers: {scanner.num_layers} "
+          f"(expected {spec['expected_layers']})")
+    n_params = sum(p.numel() for p in scanner.model.parameters())
+    print(f"Vision params: {n_params:,}")
 
-    # Extract vision encoder and free text model
-    vision_model = full_model.vision_model
-    del full_model
-    gc.collect()
-
-    vision_model = vision_model.to(device).eval()
-    print(f"\nVision encoder type: {type(vision_model).__name__}")
-
-    # Check layers
-    layers = list(vision_model.encoder.layers)
-    num_layers = len(layers)
-    print(f"Transformer layers: {num_layers}")
-
-    # Check hidden size
-    hidden_size = layers[0].self_attn.out_proj.out_features
-    print(f"Hidden size: {hidden_size}")
-    print(f"Vision params: {sum(p.numel() for p in vision_model.parameters()):,}")
-
-    # Run inference on a test image
-    print("\nRunning inference on a test image...")
     test_image = Image.fromarray(
-        np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
+        np.random.randint(0, 255, (spec["image_size"], spec["image_size"], 3),
+                          dtype=np.uint8)
     )
     inputs = processor(images=test_image, return_tensors="pt")
-    pixel_values = inputs["pixel_values"].to(device=device, dtype=torch.float16)
-    print(f"Input shape: {pixel_values.shape}")
+    pixel_values = inputs["pixel_values"]
+    print(f"Input shape: {tuple(pixel_values.shape)}")
 
-    with torch.no_grad():
-        # Test embeddings
-        hidden_states = vision_model.embeddings(pixel_values)
-        print(f"Embeddings output shape: {hidden_states.shape}")
+    t0 = time.time()
+    baseline = scanner.get_baseline_embeddings(pixel_values)
+    print(f"Baseline embedding: {tuple(baseline.shape)} "
+          f"({time.time() - t0:.1f}s)")
+    assert baseline.shape == (1, spec["expected_hidden"]), baseline.shape
 
-        # Test full forward through layers
-        for layer in layers:
-            out = layer(hidden_states)
-            hidden_states = out[0] if isinstance(out, (tuple, list)) else out
-        cls_token = hidden_states[:, 0]
-        print(f"Final CLS shape: {cls_token.shape}")
-        print(f"CLS norm: {cls_token.float().norm().item():.4f}")
+    cached = scanner.cache_baseline_states(pixel_values)
+    assert len(cached) == scanner.num_layers + 1
 
-    # Verify expected shapes
-    assert num_layers == 48, f"Expected 48 layers, got {num_layers}"
-    assert hidden_size == 5120, f"Expected hidden_size 5120, got {hidden_size}"
-    assert cls_token.shape == (1, 5120), f"Expected (1, 5120), got {cls_token.shape}"
+    # Cached-path pooling must equal the direct baseline
+    cached_pooled = scanner._pool_fn(cached[-1])
+    assert torch.allclose(baseline.float(), cached_pooled.float(), atol=1e-4)
 
-    total_configs = num_layers * (num_layers + 1) // 2
-    print(f"\nTotal RYS configs: {total_configs}")
-    assert total_configs == 1176
+    # A mid-block duplication must change the embedding
+    L = scanner.num_layers
+    modified = scanner.run_config_from_cache(L // 4, L // 2, cached)
+    assert not torch.allclose(baseline.float(), modified.float(), atol=1e-3)
 
+    # Cache path must equal the direct path
+    direct = scanner.run_config(L // 4, L // 2, pixel_values)
+    assert torch.allclose(direct.float(), modified.float(), atol=1e-4)
+
+    # Throughput probe (batch 8)
+    batch = pixel_values.repeat(8, 1, 1, 1)
+    if device == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.time()
+    scanner.get_baseline_embeddings(batch)
+    if device == "cuda":
+        torch.cuda.synchronize()
+    dt = time.time() - t0
+    print(f"Throughput (batch 8, full forward): {8 / dt:.1f} img/s")
+
+    n = scanner.num_configs()
+    print(f"Total RYS configs: {n}")
     print("\nAll checks passed!")
 
 

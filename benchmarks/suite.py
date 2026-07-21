@@ -82,9 +82,10 @@ class Stanford40(Dataset):
     http://vision.stanford.edu/Datasets/40actions.html
     """
 
+    # NOTE: the historical .tar URLs now return 404; Stanford serves .zip.
     URLS = {
-        "images": "http://vision.stanford.edu/Datasets/Stanford40_JPEGImages.tar",
-        "splits": "http://vision.stanford.edu/Datasets/Stanford40_ImageSplits.tar",
+        "images": "http://vision.stanford.edu/Datasets/Stanford40_JPEGImages.zip",
+        "splits": "http://vision.stanford.edu/Datasets/Stanford40_ImageSplits.zip",
     }
 
     def __init__(self, root, split="train", transform=None, download=False):
@@ -98,24 +99,30 @@ class Stanford40(Dataset):
         self._load_data()
 
     def _download(self):
+        import zipfile
+
         os.makedirs(self.root, exist_ok=True)
         for name, url in self.URLS.items():
-            tar_path = os.path.join(self.root, os.path.basename(url))
+            archive_path = os.path.join(self.root, os.path.basename(url))
             target_dir = os.path.join(
                 self.root,
                 "JPEGImages" if name == "images" else "ImageSplits",
             )
             if os.path.isdir(target_dir):
                 continue
-            if not os.path.exists(tar_path):
+            if not os.path.exists(archive_path):
                 print(f"    Downloading Stanford40 {name}...")
-                urllib.request.urlretrieve(url, tar_path)
+                urllib.request.urlretrieve(url, archive_path)
             print(f"    Extracting {name}...")
-            with tarfile.open(tar_path) as tar:
-                if hasattr(tarfile, "data_filter"):
-                    tar.extractall(self.root, filter="data")
-                else:
-                    tar.extractall(self.root)
+            if zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path) as zf:
+                    zf.extractall(self.root)
+            else:
+                with tarfile.open(archive_path) as tar:
+                    if hasattr(tarfile, "data_filter"):
+                        tar.extractall(self.root, filter="data")
+                    else:
+                        tar.extractall(self.root)
 
     def _load_data(self):
         splits_dir = os.path.join(self.root, "ImageSplits")
@@ -180,7 +187,44 @@ def _load_dtd(root, transform):
     return ConcatDataset([train, val]), test
 
 
+def _ensure_eurosat(root):
+    """Pre-seed EuroSAT if the default mirror (madm.dfki.de) is down.
+
+    torchvision expects {root}/eurosat/2750/<class dirs>. Falls back to the
+    official Zenodo record, whose zip extracts to EuroSAT_RGB/.
+    """
+    base = os.path.join(root, "eurosat")
+    if os.path.isdir(os.path.join(base, "2750")):
+        return
+    try:
+        # Quick reachability check on the torchvision mirror
+        req = urllib.request.Request(
+            "https://madm.dfki.de/files/sentinel/EuroSAT.zip", method="HEAD"
+        )
+        urllib.request.urlopen(req, timeout=15)
+        return  # mirror is up; let torchvision handle download + checksum
+    except Exception:
+        pass
+
+    import zipfile
+
+    print("    madm.dfki.de unreachable — fetching EuroSAT from Zenodo...")
+    os.makedirs(base, exist_ok=True)
+    zip_path = os.path.join(base, "EuroSAT_RGB.zip")
+    if not os.path.exists(zip_path):
+        urllib.request.urlretrieve(
+            "https://zenodo.org/records/7711810/files/EuroSAT_RGB.zip",
+            zip_path,
+        )
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(base)
+    src = os.path.join(base, "EuroSAT_RGB")
+    if os.path.isdir(src) and not os.path.isdir(os.path.join(base, "2750")):
+        os.rename(src, os.path.join(base, "2750"))
+
+
 def _load_eurosat(root, transform):
+    _ensure_eurosat(root)
     full = datasets.EuroSAT(root, download=True, transform=transform)
     n = len(full)
     n_train = int(0.8 * n)
@@ -310,18 +354,31 @@ def get_labels(dataset) -> np.ndarray:
 
 # ── Subset selection ──
 
+def choose_class_subset(labels: np.ndarray, max_classes: int, seed: int = 42):
+    """Deterministically choose up to max_classes class ids (0 = all)."""
+    classes = np.unique(labels)
+    if max_classes and len(classes) > max_classes:
+        rng = np.random.default_rng(seed)
+        classes = np.sort(rng.choice(classes, max_classes, replace=False))
+    return classes
+
+
 def select_reference_subset(
-    dataset, n_per_class: int = 5, seed: int = 42
+    dataset, n_per_class: int = 5, seed: int = 42, class_subset=None
 ) -> tuple[Subset, np.ndarray]:
     """Select n_per_class images per class from a dataset.
+
+    Args:
+        class_subset: optional array of class ids to restrict to.
 
     Returns:
         (Subset, labels array) for the selected reference images.
     """
     labels = get_labels(dataset)
+    classes = np.unique(labels) if class_subset is None else np.asarray(class_subset)
     rng = np.random.default_rng(seed)
     indices = []
-    for label in np.unique(labels):
+    for label in classes:
         class_indices = np.where(labels == label)[0]
         n = min(n_per_class, len(class_indices))
         selected = rng.choice(class_indices, n, replace=False)
@@ -330,17 +387,25 @@ def select_reference_subset(
 
 
 def select_candidate_subset(
-    dataset, n_candidates: int = 1000, seed: int = 42
+    dataset, n_candidates: int = 1000, seed: int = 42, class_subset=None
 ) -> tuple[Subset, np.ndarray]:
-    """Select a random subset as candidates for hard-image selection.
+    """Select a random subset as candidates for probe-image selection.
+
+    Args:
+        class_subset: optional array of class ids to restrict to (keeps the
+        candidate pool consistent with the reference centroids).
 
     Returns:
         (Subset, labels array) for the selected candidates.
     """
     labels = get_labels(dataset)
-    n = min(n_candidates, len(dataset))
+    if class_subset is not None:
+        pool = np.where(np.isin(labels, np.asarray(class_subset)))[0]
+    else:
+        pool = np.arange(len(labels))
+    n = min(n_candidates, len(pool))
     rng = np.random.default_rng(seed)
-    indices = rng.choice(len(dataset), n, replace=False).tolist()
+    indices = rng.choice(pool, n, replace=False).tolist()
     return Subset(dataset, indices), labels[indices]
 
 
@@ -349,6 +414,7 @@ def load_benchmark(
     processor,
     dataset_names: list[str] | None = None,
     image_size: int = 224,
+    allow_missing: bool = False,
 ):
     """Load the benchmark suite.
 
@@ -357,12 +423,16 @@ def load_benchmark(
         processor: CLIPImageProcessor for building transforms.
         dataset_names: Subset of dataset names to load (None = all).
         image_size: Input resolution expected by the model.
+        allow_missing: if False (default), any dataset that fails to load
+            raises — a silently shrinking benchmark would otherwise produce
+            aggregates that look complete but are not.
 
     Returns:
         dict of {name: (train_dataset, test_dataset)}.
     """
     transform = get_transform(processor, image_size=image_size)
     benchmark = {}
+    failures = {}
 
     for name, loader_fn in BENCHMARK_DATASETS:
         if dataset_names is not None and name not in dataset_names:
@@ -376,6 +446,13 @@ def load_benchmark(
             benchmark[name] = (train_ds, test_ds)
             print(f"train={len(train_ds)}, test={len(test_ds)}")
         except Exception as e:
+            failures[name] = repr(e)
             print(f"FAILED: {e}")
+
+    if failures and not allow_missing:
+        raise RuntimeError(
+            f"Datasets failed to load: {failures}. "
+            "Fix them or pass --allow-missing-datasets to proceed without."
+        )
 
     return benchmark

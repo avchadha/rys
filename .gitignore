@@ -5,3 +5,7 @@ __pycache__/
 BOS14-Dev-VPN-avchadha.conf
 BOS14-Dev-VPN-avchadha.conf:Zone.Identifier
 .claude/
+.venv/
+results/
+outputs/
+run.log

@@ -16,19 +16,25 @@ executed twice. No weights are changed; the same parameters are reused.
 ## Configuration Space
 
 For a model with L layers, valid configs satisfy 0 ≤ i < j ≤ L.
-This gives L*(L+1)/2 configurations. For InternViT-6B (L=45), that is 1035 configs.
+This gives L*(L+1)/2 configurations. For EVA-CLIP-18B (L=48), that is 1176 configs.
 
-## Scoring with Linear Probes
+## Scoring (our adaptation)
 
 For each (i, j) configuration:
-1. Extract frozen embeddings (CLS token) from the modified model on a dataset.
-2. Train a linear classifier (logistic regression) on these embeddings.
-3. Record top-1 classification accuracy.
-4. Compute Δ accuracy = config accuracy − baseline accuracy (no duplication).
+1. Extract frozen embeddings (post-layernorm CLS token) from the modified model.
+2. Score by nearest-centroid classification (cosine similarity, no training).
+3. Compute Δ accuracy = config accuracy − baseline accuracy (no duplication).
+
+NOTE: the original RYS work scored *generative behavior* of the full LLM
+(math answers, EQ-Bench scores). We probe *embedding geometry* instead —
+the natural interface of a contrastive vision encoder, but a deviation
+worth keeping in mind: a null result here constrains representation
+quality, not everything the model could do downstream.
 
 ## Heatmap Generation
 
-Results are stored in a matrix M of shape (L, L) where M[i][j] = Δ accuracy.
+Results are stored in a matrix M of shape (L, L+1) where M[i][j] = Δ accuracy
+(valid cells satisfy 0 ≤ i < j ≤ L).
 The matrix is visualized as a 2D heatmap:
 - X-axis: j (end of duplicated block)
 - Y-axis: i (start of duplicated block)
@@ -44,6 +50,9 @@ The matrix is visualized as a 2D heatmap:
 
 ## Our Experiment
 
-We apply RYS to InternViT-6B (a 6-billion parameter Vision Transformer) to
-investigate whether similar functional circuits exist in vision models, and whether
-layer duplication improves or degrades visual representation quality.
+We apply RYS to the EVA-CLIP-18B vision encoder (17.5B parameters, 48 layers)
+to investigate whether similar functional circuits exist in vision models, and
+whether layer duplication improves or degrades visual representation quality.
+The follow-up posts (RYS-II, Sapir-Whorf) motivate two additions: a
+single-layer k-repeat scan, and a layer-anatomy analysis (style x content
+grid) that independently locates the candidate "reasoning" phase.
