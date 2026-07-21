@@ -1,0 +1,779 @@
+=== [0/5] Model loading sanity check ===
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Device: cuda
+Loading facebook/dinov3-vit7b16-pretrain-lvd1689m...
+Fetching 6 files:   0%|          | 0/6 [00:00<?, ?it/s]Fetching 6 files:  17%|█▋        | 1/6 [00:44<03:43, 44.75s/it]Fetching 6 files:  33%|███▎      | 2/6 [00:46<01:18, 19.72s/it]Fetching 6 files: 100%|██████████| 6/6 [00:46<00:00,  7.82s/it]
+Loading weights:   0%|          | 0/687 [00:00<?, ?it/s]Loading weights:  16%|█▌        | 111/687 [00:00<00:00, 1096.86it/s]Loading weights:  32%|███▏      | 222/687 [00:00<00:00, 1094.76it/s]Loading weights:  50%|████▉     | 341/687 [00:00<00:00, 1129.57it/s]Loading weights:  66%|██████▌   | 454/687 [00:00<00:00, 807.03it/s] Loading weights:  79%|███████▉  | 545/687 [00:01<00:00, 384.86it/s]Loading weights:  89%|████████▉ | 610/687 [00:01<00:00, 407.76it/s]Loading weights:  98%|█████████▊| 670/687 [00:01<00:00, 289.43it/s]Loading weights: 100%|██████████| 687/687 [00:01<00:00, 444.66it/s]
+  40 layers, device=cuda, dtype=torch.float16
+Layers: 40 (expected 40)
+Vision params: 6,716,035,072
+Input shape: (1, 3, 224, 224)
+Baseline embedding: (1, 4096) (0.5s)
+Throughput (batch 8, full forward): 128.3 img/s
+Total RYS configs: 820
+
+All checks passed!
+=== [1/5] Layer anatomy ===
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading facebook/dinov3-vit7b16-pretrain-lvd1689m...
+Loading weights:   0%|          | 0/687 [00:00<?, ?it/s]Loading weights:  16%|█▌        | 108/687 [00:00<00:00, 1058.96it/s]Loading weights:  31%|███       | 214/687 [00:00<00:00, 1014.03it/s]Loading weights:  47%|████▋     | 322/687 [00:00<00:00, 1037.67it/s]Loading weights:  63%|██████▎   | 433/687 [00:00<00:00, 1060.27it/s]Loading weights:  79%|███████▉  | 543/687 [00:00<00:00, 1046.52it/s]Loading weights:  96%|█████████▌| 660/687 [00:00<00:00, 1080.66it/s]Loading weights: 100%|██████████| 687/687 [00:00<00:00, 1077.52it/s]
+  40 layers, device=cuda, dtype=torch.float16
+Extracting layerwise features (pool=mean_patch)...
+  Content-dominant layers (mean_patch): 28..40
+  Saved: results-dinov3/anatomy/anatomy_mean_patch.png
+  Saved: results-dinov3/anatomy/anatomy_pca_mean_patch.png
+Extracting layerwise features (pool=cls)...
+  Content-dominant layers (cls): 35..40
+  Saved: results-dinov3/anatomy/anatomy_cls.png
+  Saved: results-dinov3/anatomy/anatomy_pca_cls.png
+  Saved: results-dinov3/anatomy/anatomy.json
+=== [2/5] Smoke scan (eurosat) ===
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Device: cuda
+Loading facebook/dinov3-vit7b16-pretrain-lvd1689m...
+Loading weights:   0%|          | 0/687 [00:00<?, ?it/s]Loading weights:  17%|█▋        | 120/687 [00:00<00:00, 1182.88it/s]Loading weights:  35%|███▍      | 239/687 [00:00<00:00, 1157.26it/s]Loading weights:  52%|█████▏    | 356/687 [00:00<00:00, 1156.78it/s]Loading weights:  69%|██████▉   | 473/687 [00:00<00:00, 1158.67it/s]Loading weights:  86%|████████▌ | 592/687 [00:00<00:00, 1166.31it/s]Loading weights: 100%|██████████| 687/687 [00:00<00:00, 1179.77it/s]
+  40 layers, device=cuda, dtype=torch.float16
+Model: 40 layers, 820 configs to scan.
+
+Loading benchmark datasets:
+  Loading eurosat... train=21600, test=5400
+
+============================================================
+Phase 1: Building probe sets
+============================================================
+
+  [eurosat] 10 classes, 15 reference images per class
+  [eurosat] Extracting baseline features (150 ref + 1000 candidates)... 8.4s
+  [eurosat] Baseline on candidates: acc=0.891, mrr=0.938
+  [eurosat] Baseline hard(borderline)=0.500 rand=0.950
+  [eurosat] Noise control... max noise Δacc=+0.011
+
+============================================================
+Phase 2: Scanning all configs
+============================================================
+
+  [eurosat] 150 ref + 100 hard + 100 rand images, 17 config groups
+/home/ubuntu/rys/scripts/run_scan.py:374: RuntimeWarning: divide by zero encountered in divide
+  mrr = float((1.0 / d["rank"]).mean())
+  [eurosat] Group 1/17 (50 configs) — 114s — 50/820 done
+  [eurosat] Group 2/17 (50 configs) — 112s — 100/820 done
+  [eurosat] Group 3/17 (50 configs) — 109s — 150/820 done
+  [eurosat] Group 4/17 (50 configs) — 105s — 200/820 done
+  [eurosat] Group 5/17 (50 configs) — 101s — 250/820 done
+  [eurosat] Group 6/17 (50 configs) — 96s — 300/820 done
+  [eurosat] Group 7/17 (50 configs) — 92s — 350/820 done
+  [eurosat] Group 8/17 (50 configs) — 87s — 400/820 done
+  [eurosat] Group 9/17 (50 configs) — 83s — 450/820 done
+  [eurosat] Group 10/17 (50 configs) — 78s — 500/820 done
+  [eurosat] Group 11/17 (50 configs) — 72s — 550/820 done
+  [eurosat] Group 12/17 (50 configs) — 66s — 600/820 done
+  [eurosat] Group 13/17 (50 configs) — 59s — 650/820 done
+  [eurosat] Group 14/17 (50 configs) — 51s — 700/820 done
+  [eurosat] Group 15/17 (50 configs) — 42s — 750/820 done
+  [eurosat] Group 16/17 (50 configs) — 30s — 800/820 done
+/home/ubuntu/rys/scripts/run_scan.py:471: RuntimeWarning: Mean of empty slice
+  agg = np.nanmean(stack, axis=0)
+/home/ubuntu/rys/scripts/run_scan.py:483: RuntimeWarning: Mean of empty slice
+  aggz = np.nanmean(np.stack(zstack), axis=0)
+/home/ubuntu/rys/.venv-dino/lib/python3.10/site-packages/numpy/lib/nanfunctions.py:1741: RuntimeWarning: invalid value encountered in subtract
+  np.subtract(arr, avg, out=arr, casting='unsafe', where=where)
+/home/ubuntu/rys/scripts/run_scan.py:482: RuntimeWarning: invalid value encountered in subtract
+  zstack.append((d - mu) / (sd if sd > 1e-9 else 1.0))
+  [eurosat] Group 17/17 (20 configs) — 8s — 820/820 done
+
+============================================================
+Aggregating results
+============================================================
+  Saved aggregated delta + z-score matrices.
+
+Baseline results:
+  eurosat: hard(borderline) acc=0.500, rand acc=0.950
+
+Random-split aggregated Δacc: best=+0.0000, worst=-0.8200, mean=-0.0110
+
+Results saved to results-dinov3/
+=== [3/5] Full sweep ===
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Device: cuda
+Loading facebook/dinov3-vit7b16-pretrain-lvd1689m...
+Loading weights:   0%|          | 0/687 [00:00<?, ?it/s]Loading weights:  17%|█▋        | 118/687 [00:00<00:00, 1169.00it/s]Loading weights:  34%|███▍      | 235/687 [00:00<00:00, 1149.56it/s]Loading weights:  51%|█████     | 350/687 [00:00<00:00, 1141.97it/s]Loading weights:  68%|██████▊   | 465/687 [00:00<00:00, 1140.28it/s]Loading weights:  84%|████████▍ | 580/687 [00:00<00:00, 1091.00it/s]Loading weights: 100%|██████████| 687/687 [00:00<00:00, 1135.26it/s]
+  40 layers, device=cuda, dtype=torch.float16
+Model: 40 layers, 820 configs to scan.
+
+Loading benchmark datasets:
+  Loading imagenet... train=1281167, test=50000
+  Loading dtd... train=3760, test=1880
+  Loading eurosat... train=21600, test=5400
+  Loading places365... train=1803460, test=36500
+  Loading stanford40... train=4000, test=5532
+  Loading fgvc_aircraft... train=6667, test=3333
+  Loading counting... train=5000, test=2000
+  Loading same_different... train=5000, test=2000
+  Loading spatial_relation... train=5000, test=2000
+  Loading symmetry... train=5000, test=2000
+  Loading inside_outside... train=5000, test=2000
+
+============================================================
+Phase 1: Building probe sets
+============================================================
+  Loaded persisted probe sets for: ['eurosat']
+
+  [imagenet] 100 classes, 5 reference images per class
+  [imagenet] Extracting baseline features (500 ref + 1000 candidates)... 11.2s
+  [imagenet] Baseline on candidates: acc=0.935, mrr=0.958
+  [imagenet] Baseline hard(borderline)=0.500 rand=0.990
+  [imagenet] Noise control... max noise Δacc=-0.000
+
+  [dtd] 47 classes, 5 reference images per class
+  [dtd] Extracting baseline features (235 ref + 1000 candidates)... 9.2s
+  [dtd] Baseline on candidates: acc=0.695, mrr=0.786
+  [dtd] Baseline hard(borderline)=0.500 rand=0.750
+  [dtd] Noise control... max noise Δacc=+0.000
+  [eurosat] Restored probe sets (150 ref, 100 hard, 100 rand)
+
+  [places365] 100 classes, 5 reference images per class
+  [places365] Extracting baseline features (500 ref + 1000 candidates)... 10.5s
+  [places365] Baseline on candidates: acc=0.555, mrr=0.678
+  [places365] Baseline hard(borderline)=0.500 rand=0.610
+  [places365] Noise control... max noise Δacc=+0.003
+
+  [stanford40] 40 classes, 5 reference images per class
+  [stanford40] Extracting baseline features (200 ref + 1000 candidates)... 8.7s
+  [stanford40] Baseline on candidates: acc=0.886, mrr=0.926
+  [stanford40] Baseline hard(borderline)=0.500 rand=0.960
+  [stanford40] Noise control... max noise Δacc=+0.018
+
+  [fgvc_aircraft] 100 classes, 5 reference images per class
+  [fgvc_aircraft] Extracting baseline features (500 ref + 1000 candidates)... 11.6s
+  [fgvc_aircraft] Baseline on candidates: acc=0.492, mrr=0.659
+  [fgvc_aircraft] Baseline hard(borderline)=0.500 rand=0.450
+  [fgvc_aircraft] Noise control... max noise Δacc=+0.009
+
+  [counting] 10 classes, 15 reference images per class
+  [counting] Extracting baseline features (150 ref + 1000 candidates)... 8.2s
+  [counting] Baseline on candidates: acc=0.430, mrr=0.637
+  [counting] Baseline hard(borderline)=0.500 rand=0.420
+  [counting] Noise control... max noise Δacc=+0.000
+
+  [same_different] 2 classes, 50 reference images per class
+  [same_different] Extracting baseline features (100 ref + 1000 candidates)... 7.9s
+  [same_different] Baseline on candidates: acc=0.830, mrr=0.915
+  [same_different] Baseline hard(borderline)=0.500 rand=0.930
+  [same_different] Noise control... max noise Δacc=+0.025
+
+  [spatial_relation] 4 classes, 38 reference images per class
+  [spatial_relation] Extracting baseline features (152 ref + 1000 candidates)... 8.2s
+  [spatial_relation] Baseline on candidates: acc=0.938, mrr=0.969
+  [spatial_relation] Baseline hard(borderline)=0.500 rand=0.990
+  [spatial_relation] Noise control... max noise Δacc=-0.000
+
+  [symmetry] 2 classes, 50 reference images per class
+  [symmetry] Extracting baseline features (100 ref + 1000 candidates)... 7.9s
+  [symmetry] Baseline on candidates: acc=0.991, mrr=0.996
+  [symmetry] Baseline hard(borderline)=0.910 rand=1.000
+  [symmetry] Noise control... max noise Δacc=+0.000
+
+  [inside_outside] 2 classes, 50 reference images per class
+  [inside_outside] Extracting baseline features (100 ref + 1000 candidates)... 7.9s
+  [inside_outside] Baseline on candidates: acc=0.994, mrr=0.997
+  [inside_outside] Baseline hard(borderline)=0.940 rand=1.000
+  [inside_outside] Noise control... max noise Δacc=+0.000
+
+============================================================
+Phase 2: Scanning all configs
+============================================================
+
+  [same_different] 100 ref + 100 hard + 100 rand images, 17 config groups
+/home/ubuntu/rys/scripts/run_scan.py:374: RuntimeWarning: divide by zero encountered in divide
+  mrr = float((1.0 / d["rank"]).mean())
+  [same_different] Group 1/17 (50 configs) — 97s — 50/820 done
+  [same_different] Group 2/17 (50 configs) — 96s — 100/820 done
+  [same_different] Group 3/17 (50 configs) — 93s — 150/820 done
+  [same_different] Group 4/17 (50 configs) — 89s — 200/820 done
+  [same_different] Group 5/17 (50 configs) — 86s — 250/820 done
+  [same_different] Group 6/17 (50 configs) — 82s — 300/820 done
+  [same_different] Group 7/17 (50 configs) — 79s — 350/820 done
+  [same_different] Group 8/17 (50 configs) — 75s — 400/820 done
+  [same_different] Group 9/17 (50 configs) — 71s — 450/820 done
+  [same_different] Group 10/17 (50 configs) — 66s — 500/820 done
+  [same_different] Group 11/17 (50 configs) — 62s — 550/820 done
+  [same_different] Group 12/17 (50 configs) — 56s — 600/820 done
+  [same_different] Group 13/17 (50 configs) — 51s — 650/820 done
+  [same_different] Group 14/17 (50 configs) — 44s — 700/820 done
+  [same_different] Group 15/17 (50 configs) — 36s — 750/820 done
+  [same_different] Group 16/17 (50 configs) — 26s — 800/820 done
+  [same_different] Group 17/17 (20 configs) — 7s — 820/820 done
+
+  [symmetry] 100 ref + 100 hard + 100 rand images, 17 config groups
+  [symmetry] Group 1/17 (50 configs) — 98s — 50/820 done
+  [symmetry] Group 2/17 (50 configs) — 96s — 100/820 done
+  [symmetry] Group 3/17 (50 configs) — 93s — 150/820 done
+  [symmetry] Group 4/17 (50 configs) — 90s — 200/820 done
+  [symmetry] Group 5/17 (50 configs) — 86s — 250/820 done
+  [symmetry] Group 6/17 (50 configs) — 83s — 300/820 done
+  [symmetry] Group 7/17 (50 configs) — 79s — 350/820 done
+  [symmetry] Group 8/17 (50 configs) — 75s — 400/820 done
+  [symmetry] Group 9/17 (50 configs) — 70s — 450/820 done
+  [symmetry] Group 10/17 (50 configs) — 66s — 500/820 done
+  [symmetry] Group 11/17 (50 configs) — 62s — 550/820 done
+  [symmetry] Group 12/17 (50 configs) — 56s — 600/820 done
+  [symmetry] Group 13/17 (50 configs) — 51s — 650/820 done
+  [symmetry] Group 14/17 (50 configs) — 44s — 700/820 done
+  [symmetry] Group 15/17 (50 configs) — 36s — 750/820 done
+  [symmetry] Group 16/17 (50 configs) — 26s — 800/820 done
+  [symmetry] Group 17/17 (20 configs) — 7s — 820/820 done
+
+  [inside_outside] 100 ref + 100 hard + 100 rand images, 17 config groups
+  [inside_outside] Group 1/17 (50 configs) — 98s — 50/820 done
+  [inside_outside] Group 2/17 (50 configs) — 95s — 100/820 done
+  [inside_outside] Group 3/17 (50 configs) — 93s — 150/820 done
+  [inside_outside] Group 4/17 (50 configs) — 89s — 200/820 done
+  [inside_outside] Group 5/17 (50 configs) — 86s — 250/820 done
+  [inside_outside] Group 6/17 (50 configs) — 83s — 300/820 done
+  [inside_outside] Group 7/17 (50 configs) — 79s — 350/820 done
+  [inside_outside] Group 8/17 (50 configs) — 75s — 400/820 done
+  [inside_outside] Group 9/17 (50 configs) — 71s — 450/820 done
+  [inside_outside] Group 10/17 (50 configs) — 66s — 500/820 done
+  [inside_outside] Group 11/17 (50 configs) — 62s — 550/820 done
+  [inside_outside] Group 12/17 (50 configs) — 56s — 600/820 done
+  [inside_outside] Group 13/17 (50 configs) — 51s — 650/820 done
+  [inside_outside] Group 14/17 (50 configs) — 44s — 700/820 done
+  [inside_outside] Group 15/17 (50 configs) — 36s — 750/820 done
+  [inside_outside] Group 16/17 (50 configs) — 26s — 800/820 done
+  [inside_outside] Group 17/17 (20 configs) — 7s — 820/820 done
+
+  [eurosat] Already complete, skipping.
+
+  [counting] 150 ref + 100 hard + 100 rand images, 17 config groups
+  [counting] Group 1/17 (50 configs) — 114s — 50/820 done
+  [counting] Group 2/17 (50 configs) — 112s — 100/820 done
+  [counting] Group 3/17 (50 configs) — 109s — 150/820 done
+  [counting] Group 4/17 (50 configs) — 104s — 200/820 done
+  [counting] Group 5/17 (50 configs) — 101s — 250/820 done
+  [counting] Group 6/17 (50 configs) — 96s — 300/820 done
+  [counting] Group 7/17 (50 configs) — 92s — 350/820 done
+  [counting] Group 8/17 (50 configs) — 87s — 400/820 done
+  [counting] Group 9/17 (50 configs) — 83s — 450/820 done
+  [counting] Group 10/17 (50 configs) — 78s — 500/820 done
+  [counting] Group 11/17 (50 configs) — 72s — 550/820 done
+  [counting] Group 12/17 (50 configs) — 66s — 600/820 done
+  [counting] Group 13/17 (50 configs) — 59s — 650/820 done
+  [counting] Group 14/17 (50 configs) — 51s — 700/820 done
+  [counting] Group 15/17 (50 configs) — 42s — 750/820 done
+  [counting] Group 16/17 (50 configs) — 30s — 800/820 done
+  [counting] Group 17/17 (20 configs) — 8s — 820/820 done
+
+  [spatial_relation] 152 ref + 100 hard + 100 rand images, 17 config groups
+  [spatial_relation] Group 1/17 (50 configs) — 114s — 50/820 done
+  [spatial_relation] Group 2/17 (50 configs) — 112s — 100/820 done
+  [spatial_relation] Group 3/17 (50 configs) — 109s — 150/820 done
+  [spatial_relation] Group 4/17 (50 configs) — 105s — 200/820 done
+  [spatial_relation] Group 5/17 (50 configs) — 101s — 250/820 done
+  [spatial_relation] Group 6/17 (50 configs) — 97s — 300/820 done
+  [spatial_relation] Group 7/17 (50 configs) — 92s — 350/820 done
+  [spatial_relation] Group 8/17 (50 configs) — 88s — 400/820 done
+  [spatial_relation] Group 9/17 (50 configs) — 83s — 450/820 done
+  [spatial_relation] Group 10/17 (50 configs) — 78s — 500/820 done
+  [spatial_relation] Group 11/17 (50 configs) — 72s — 550/820 done
+  [spatial_relation] Group 12/17 (50 configs) — 66s — 600/820 done
+  [spatial_relation] Group 13/17 (50 configs) — 59s — 650/820 done
+  [spatial_relation] Group 14/17 (50 configs) — 52s — 700/820 done
+  [spatial_relation] Group 15/17 (50 configs) — 42s — 750/820 done
+  [spatial_relation] Group 16/17 (50 configs) — 30s — 800/820 done
+  [spatial_relation] Group 17/17 (20 configs) — 8s — 820/820 done
+
+  [stanford40] 200 ref + 100 hard + 100 rand images, 17 config groups
+  [stanford40] Group 1/17 (50 configs) — 131s — 50/820 done
+  [stanford40] Group 2/17 (50 configs) — 129s — 100/820 done
+  [stanford40] Group 3/17 (50 configs) — 125s — 150/820 done
+  [stanford40] Group 4/17 (50 configs) — 120s — 200/820 done
+  [stanford40] Group 5/17 (50 configs) — 115s — 250/820 done
+  [stanford40] Group 6/17 (50 configs) — 111s — 300/820 done
+  [stanford40] Group 7/17 (50 configs) — 106s — 350/820 done
+  [stanford40] Group 8/17 (50 configs) — 100s — 400/820 done
+  [stanford40] Group 9/17 (50 configs) — 95s — 450/820 done
+  [stanford40] Group 10/17 (50 configs) — 89s — 500/820 done
+  [stanford40] Group 11/17 (50 configs) — 82s — 550/820 done
+  [stanford40] Group 12/17 (50 configs) — 76s — 600/820 done
+  [stanford40] Group 13/17 (50 configs) — 68s — 650/820 done
+  [stanford40] Group 14/17 (50 configs) — 59s — 700/820 done
+  [stanford40] Group 15/17 (50 configs) — 48s — 750/820 done
+  [stanford40] Group 16/17 (50 configs) — 34s — 800/820 done
+  [stanford40] Group 17/17 (20 configs) — 9s — 820/820 done
+
+  [dtd] 235 ref + 100 hard + 100 rand images, 17 config groups
+  [dtd] Group 1/17 (50 configs) — 143s — 50/820 done
+  [dtd] Group 2/17 (50 configs) — 139s — 100/820 done
+  [dtd] Group 3/17 (50 configs) — 135s — 150/820 done
+  [dtd] Group 4/17 (50 configs) — 130s — 200/820 done
+  [dtd] Group 5/17 (50 configs) — 125s — 250/820 done
+  [dtd] Group 6/17 (50 configs) — 120s — 300/820 done
+  [dtd] Group 7/17 (50 configs) — 115s — 350/820 done
+  [dtd] Group 8/17 (50 configs) — 109s — 400/820 done
+  [dtd] Group 9/17 (50 configs) — 103s — 450/820 done
+  [dtd] Group 10/17 (50 configs) — 97s — 500/820 done
+  [dtd] Group 11/17 (50 configs) — 89s — 550/820 done
+  [dtd] Group 12/17 (50 configs) — 82s — 600/820 done
+  [dtd] Group 13/17 (50 configs) — 74s — 650/820 done
+  [dtd] Group 14/17 (50 configs) — 64s — 700/820 done
+  [dtd] Group 15/17 (50 configs) — 52s — 750/820 done
+  [dtd] Group 16/17 (50 configs) — 37s — 800/820 done
+  [dtd] Group 17/17 (20 configs) — 10s — 820/820 done
+
+  [imagenet] 500 ref + 100 hard + 100 rand images, 17 config groups
+  [imagenet] Group 1/17 (50 configs) — 228s — 50/820 done
+  [imagenet] Group 2/17 (50 configs) — 224s — 100/820 done
+  [imagenet] Group 3/17 (50 configs) — 217s — 150/820 done
+  [imagenet] Group 4/17 (50 configs) — 208s — 200/820 done
+  [imagenet] Group 5/17 (50 configs) — 201s — 250/820 done
+  [imagenet] Group 6/17 (50 configs) — 192s — 300/820 done
+  [imagenet] Group 7/17 (50 configs) — 184s — 350/820 done
+  [imagenet] Group 8/17 (50 configs) — 174s — 400/820 done
+  [imagenet] Group 9/17 (50 configs) — 165s — 450/820 done
+  [imagenet] Group 10/17 (50 configs) — 155s — 500/820 done
+  [imagenet] Group 11/17 (50 configs) — 143s — 550/820 done
+  [imagenet] Group 12/17 (50 configs) — 131s — 600/820 done
+  [imagenet] Group 13/17 (50 configs) — 118s — 650/820 done
+  [imagenet] Group 14/17 (50 configs) — 102s — 700/820 done
+  [imagenet] Group 15/17 (50 configs) — 84s — 750/820 done
+  [imagenet] Group 16/17 (50 configs) — 59s — 800/820 done
+  [imagenet] Group 17/17 (20 configs) — 16s — 820/820 done
+
+  [places365] 500 ref + 100 hard + 100 rand images, 17 config groups
+  [places365] Group 1/17 (50 configs) — 228s — 50/820 done
+  [places365] Group 2/17 (50 configs) — 223s — 100/820 done
+  [places365] Group 3/17 (50 configs) — 216s — 150/820 done
+  [places365] Group 4/17 (50 configs) — 208s — 200/820 done
+  [places365] Group 5/17 (50 configs) — 200s — 250/820 done
+  [places365] Group 6/17 (50 configs) — 192s — 300/820 done
+  [places365] Group 7/17 (50 configs) — 183s — 350/820 done
+  [places365] Group 8/17 (50 configs) — 174s — 400/820 done
+  [places365] Group 9/17 (50 configs) — 165s — 450/820 done
+  [places365] Group 10/17 (50 configs) — 154s — 500/820 done
+  [places365] Group 11/17 (50 configs) — 143s — 550/820 done
+  [places365] Group 12/17 (50 configs) — 131s — 600/820 done
+  [places365] Group 13/17 (50 configs) — 118s — 650/820 done
+  [places365] Group 14/17 (50 configs) — 102s — 700/820 done
+  [places365] Group 15/17 (50 configs) — 84s — 750/820 done
+  [places365] Group 16/17 (50 configs) — 59s — 800/820 done
+  [places365] Group 17/17 (20 configs) — 15s — 820/820 done
+
+  [fgvc_aircraft] 500 ref + 100 hard + 100 rand images, 17 config groups
+  [fgvc_aircraft] Group 1/17 (50 configs) — 229s — 50/820 done
+  [fgvc_aircraft] Group 2/17 (50 configs) — 224s — 100/820 done
+  [fgvc_aircraft] Group 3/17 (50 configs) — 217s — 150/820 done
+  [fgvc_aircraft] Group 4/17 (50 configs) — 209s — 200/820 done
+  [fgvc_aircraft] Group 5/17 (50 configs) — 201s — 250/820 done
+  [fgvc_aircraft] Group 6/17 (50 configs) — 193s — 300/820 done
+  [fgvc_aircraft] Group 7/17 (50 configs) — 185s — 350/820 done
+  [fgvc_aircraft] Group 8/17 (50 configs) — 175s — 400/820 done
+  [fgvc_aircraft] Group 9/17 (50 configs) — 165s — 450/820 done
+  [fgvc_aircraft] Group 10/17 (50 configs) — 155s — 500/820 done
+  [fgvc_aircraft] Group 11/17 (50 configs) — 144s — 550/820 done
+  [fgvc_aircraft] Group 12/17 (50 configs) — 132s — 600/820 done
+  [fgvc_aircraft] Group 13/17 (50 configs) — 119s — 650/820 done
+  [fgvc_aircraft] Group 14/17 (50 configs) — 103s — 700/820 done
+  [fgvc_aircraft] Group 15/17 (50 configs) — 84s — 750/820 done
+  [fgvc_aircraft] Group 16/17 (50 configs) — 60s — 800/820 done
+  [fgvc_aircraft] Group 17/17 (20 configs) — 16s — 820/820 done
+
+============================================================
+Phase 2b: Single-layer k-repeat scan
+============================================================
+  [same_different] Repeat scan: 80 configs, 2 groups
+/home/ubuntu/rys/probes/nearest_centroid.py:103: RuntimeWarning: divide by zero encountered in divide
+  "mrr": float((1.0 / d["rank"]).mean()),
+  [same_different] Repeat group 1/2 — 62s
+  [same_different] Repeat group 2/2 — 28s
+  [symmetry] Repeat scan: 80 configs, 2 groups
+  [symmetry] Repeat group 1/2 — 62s
+  [symmetry] Repeat group 2/2 — 28s
+  [inside_outside] Repeat scan: 80 configs, 2 groups
+  [inside_outside] Repeat group 1/2 — 62s
+  [inside_outside] Repeat group 2/2 — 28s
+  [eurosat] Repeat scan: 80 configs, 2 groups
+  [eurosat] Repeat group 1/2 — 72s
+  [eurosat] Repeat group 2/2 — 33s
+  [counting] Repeat scan: 80 configs, 2 groups
+  [counting] Repeat group 1/2 — 72s
+  [counting] Repeat group 2/2 — 33s
+  [spatial_relation] Repeat scan: 80 configs, 2 groups
+  [spatial_relation] Repeat group 1/2 — 73s
+  [spatial_relation] Repeat group 2/2 — 33s
+  [stanford40] Repeat scan: 80 configs, 2 groups
+  [stanford40] Repeat group 1/2 — 83s
+  [stanford40] Repeat group 2/2 — 38s
+  [dtd] Repeat scan: 80 configs, 2 groups
+  [dtd] Repeat group 1/2 — 90s
+  [dtd] Repeat group 2/2 — 41s
+  [imagenet] Repeat scan: 80 configs, 2 groups
+  [imagenet] Repeat group 1/2 — 145s
+  [imagenet] Repeat group 2/2 — 65s
+  [places365] Repeat scan: 80 configs, 2 groups
+  [places365] Repeat group 1/2 — 144s
+  [places365] Repeat group 2/2 — 65s
+  [fgvc_aircraft] Repeat scan: 80 configs, 2 groups
+  [fgvc_aircraft] Repeat group 1/2 — 145s
+/home/ubuntu/rys/scripts/run_scan.py:471: RuntimeWarning: Mean of empty slice
+  agg = np.nanmean(stack, axis=0)
+/home/ubuntu/rys/scripts/run_scan.py:483: RuntimeWarning: Mean of empty slice
+  aggz = np.nanmean(np.stack(zstack), axis=0)
+/home/ubuntu/rys/.venv-dino/lib/python3.10/site-packages/numpy/lib/nanfunctions.py:1741: RuntimeWarning: invalid value encountered in subtract
+  np.subtract(arr, avg, out=arr, casting='unsafe', where=where)
+/home/ubuntu/rys/scripts/run_scan.py:482: RuntimeWarning: invalid value encountered in subtract
+  zstack.append((d - mu) / (sd if sd > 1e-9 else 1.0))
+  [fgvc_aircraft] Repeat group 2/2 — 66s
+
+============================================================
+Aggregating results
+============================================================
+  Saved aggregated delta + z-score matrices.
+
+Baseline results:
+  imagenet: hard(borderline) acc=0.500, rand acc=0.990
+  dtd: hard(borderline) acc=0.500, rand acc=0.750
+  eurosat: hard(borderline) acc=0.500, rand acc=0.950
+  places365: hard(borderline) acc=0.500, rand acc=0.610
+  stanford40: hard(borderline) acc=0.500, rand acc=0.960
+  fgvc_aircraft: hard(borderline) acc=0.500, rand acc=0.450
+  counting: hard(borderline) acc=0.500, rand acc=0.420
+  same_different: hard(borderline) acc=0.500, rand acc=0.930
+  spatial_relation: hard(borderline) acc=0.500, rand acc=0.990
+  symmetry: hard(borderline) acc=0.910, rand acc=1.000
+  inside_outside: hard(borderline) acc=0.940, rand acc=1.000
+
+Random-split aggregated Δacc: best=+0.0064, worst=-0.6500, mean=-0.0067
+
+Results saved to results-dinov3/
+=== [4/5] Stage-2 confirmation ===
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading facebook/dinov3-vit7b16-pretrain-lvd1689m...
+Loading weights:   0%|          | 0/687 [00:00<?, ?it/s]Loading weights:  19%|█▉        | 129/687 [00:00<00:00, 1280.55it/s]Loading weights:  38%|███▊      | 258/687 [00:00<00:00, 1190.68it/s]Loading weights:  55%|█████▌    | 378/687 [00:00<00:00, 1173.08it/s]Loading weights:  72%|███████▏  | 496/687 [00:00<00:00, 1161.81it/s]Loading weights:  89%|████████▉ | 613/687 [00:00<00:00, 1144.84it/s]Loading weights: 100%|██████████| 687/687 [00:00<00:00, 1175.40it/s]
+  40 layers, device=cuda, dtype=torch.float16
+Confirming 20 top + 20 control configs
+  Loading dtd... train=3760, test=1880
+  Loading eurosat... train=21600, test=5400
+  Loading places365... train=1803460, test=36500
+  Loading stanford40... train=4000, test=5532
+  Loading fgvc_aircraft... train=6667, test=3333
+  Loading counting... train=5000, test=2000
+  Loading same_different... train=5000, test=2000
+  Loading spatial_relation... train=5000, test=2000
+  Loading symmetry... train=5000, test=2000
+  Loading inside_outside... train=5000, test=2000
+
+  [dtd] 235 refs, 500 fresh test images
+  [dtd] baseline acc=0.720
+
+  [eurosat] 150 refs, 500 fresh test images
+  [eurosat] baseline acc=0.900
+
+  [places365] 500 refs, 500 fresh test images
+  [places365] baseline acc=0.580
+
+  [stanford40] 200 refs, 500 fresh test images
+  [stanford40] baseline acc=0.882
+
+  [fgvc_aircraft] 500 refs, 500 fresh test images
+  [fgvc_aircraft] baseline acc=0.508
+
+  [counting] 150 refs, 500 fresh test images
+  [counting] baseline acc=0.400
+
+  [same_different] 100 refs, 500 fresh test images
+  [same_different] baseline acc=0.752
+
+  [spatial_relation] 152 refs, 500 fresh test images
+  [spatial_relation] baseline acc=0.942
+
+  [symmetry] 100 refs, 500 fresh test images
+  [symmetry] baseline acc=0.996
+
+  [inside_outside] 100 refs, 500 fresh test images
+  [inside_outside] baseline acc=0.992
+
+======================================================================
+Control configs: mean Δacc=-0.0005 (sd 0.0047)
+    config     kind     Δacc               95% CI beats null
+   (13, 28)  control +0.0090 [+0.0040, +0.0142]   YES
+   (16, 28)  control +0.0080 [+0.0032, +0.0124]   no
+   (14, 30)      top +0.0076 [+0.0028, +0.0124]   no
+   (13, 31)      top +0.0060 [+0.0012, +0.0104]   no
+   (20, 27)      top +0.0058 [+0.0014, +0.0100]   no
+   (13, 26)  control +0.0058 [+0.0004, +0.0112]   no
+   (21, 27)      top +0.0054 [+0.0010, +0.0096]   no
+   (15, 31)      top +0.0054 [+0.0008, +0.0100]   no
+   (16, 31)      top +0.0052 [+0.0008, +0.0096]   no
+    (4, 31)      top +0.0046 [-0.0014, +0.0104]   no
+   (15, 24)  control +0.0040 [-0.0004, +0.0080]   no
+    (3, 31)      top +0.0036 [-0.0022, +0.0092]   no
+   (26, 31)      top +0.0036 [+0.0002, +0.0072]   no
+    (9, 32)      top +0.0034 [-0.0024, +0.0090]   no
+    (8, 32)      top +0.0030 [-0.0032, +0.0088]   no
+   (15, 21)  control +0.0024 [-0.0014, +0.0060]   no
+    (6, 32)      top +0.0018 [-0.0044, +0.0076]   no
+    (5, 32)      top +0.0012 [-0.0050, +0.0070]   no
+    (2, 32)      top +0.0012 [-0.0044, +0.0070]   no
+    (1, 31)      top +0.0006 [-0.0058, +0.0068]   no
+   (32, 33)  control +0.0006 [-0.0024, +0.0034]   no
+    (3, 32)      top +0.0006 [-0.0052, +0.0064]   no
+   (20, 21)  control +0.0006 [-0.0020, +0.0028]   no
+    (2, 31)      top +0.0000 [-0.0058, +0.0058]   no
+     (7, 8)  control +0.0000 [-0.0016, +0.0016]   no
+    (0, 31)      top -0.0002 [-0.0068, +0.0062]   no
+   (30, 34)  control -0.0006 [-0.0042, +0.0030]   no
+   (12, 14)  control -0.0006 [-0.0030, +0.0018]   no
+   (11, 13)  control -0.0006 [-0.0030, +0.0018]   no
+   (32, 35)  control -0.0010 [-0.0044, +0.0024]   no
+    (1, 32)      top -0.0010 [-0.0072, +0.0054]   no
+    (2, 13)  control -0.0012 [-0.0048, +0.0022]   no
+    (0, 32)      top -0.0016 [-0.0080, +0.0044]   no
+    (6, 19)  control -0.0022 [-0.0066, +0.0020]   no
+   (11, 35)  control -0.0024 [-0.0076, +0.0026]   no
+    (3, 34)  control -0.0046 [-0.0108, +0.0014]   no
+   (13, 36)  control -0.0054 [-0.0100, -0.0006]   no
+    (7, 40)  control -0.0058 [-0.0106, -0.0008]   no
+   (29, 37)  control -0.0064 [-0.0104, -0.0024]   no
+   (31, 38)  control -0.0102 [-0.0144, -0.0060]   no
+
+Saved: results-dinov3/confirm_results.json
+=== [5/5] Heatmaps + report ===
+  Saved: outputs-dinov3/heatmap_imagenet_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_imagenet_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_imagenet_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_imagenet_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_dtd_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_dtd_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_dtd_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_dtd_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_eurosat_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_eurosat_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_eurosat_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_eurosat_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_places365_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_places365_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_places365_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_places365_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_stanford40_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_stanford40_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_stanford40_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_stanford40_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_fgvc_aircraft_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_fgvc_aircraft_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_fgvc_aircraft_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_fgvc_aircraft_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_counting_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_counting_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_counting_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_counting_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_same_different_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_same_different_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_same_different_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_same_different_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_spatial_relation_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_spatial_relation_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_spatial_relation_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_spatial_relation_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_symmetry_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_symmetry_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_symmetry_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_symmetry_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_inside_outside_hard_accuracy.png
+  Saved: outputs-dinov3/heatmap_inside_outside_hard_mrr.png
+  Saved: outputs-dinov3/heatmap_inside_outside_rand_accuracy.png
+  Saved: outputs-dinov3/heatmap_inside_outside_rand_mrr.png
+  Saved: outputs-dinov3/heatmap_aggregated_hard_accuracy_delta.png
+  Saved: outputs-dinov3/heatmap_aggregated_hard_accuracy_zscore.png
+  Saved: outputs-dinov3/heatmap_aggregated_hard_mrr_delta.png
+  Saved: outputs-dinov3/heatmap_aggregated_hard_mrr_zscore.png
+  Saved: outputs-dinov3/heatmap_aggregated_rand_accuracy_delta.png
+  Saved: outputs-dinov3/heatmap_aggregated_rand_accuracy_zscore.png
+  Saved: outputs-dinov3/heatmap_aggregated_rand_mrr_delta.png
+  Saved: outputs-dinov3/heatmap_aggregated_rand_mrr_zscore.png
+  Saved: outputs-dinov3/pareto_rand_accuracy.png
+  Saved: outputs-dinov3/repeats_spatial_relation.png
+  Saved: outputs-dinov3/repeats_dtd.png
+  Saved: outputs-dinov3/repeats_imagenet.png
+  Saved: outputs-dinov3/repeats_eurosat.png
+  Saved: outputs-dinov3/repeats_inside_outside.png
+  Saved: outputs-dinov3/repeats_same_different.png
+  Saved: outputs-dinov3/repeats_places365.png
+  Saved: outputs-dinov3/repeats_symmetry.png
+  Saved: outputs-dinov3/repeats_stanford40.png
+  Saved: outputs-dinov3/repeats_counting.png
+  Saved: outputs-dinov3/repeats_fgvc_aircraft.png
+/home/ubuntu/rys/scripts/report.py:127: RuntimeWarning: Mean of empty slice
+  "delta": np.nanmean(np.stack(deltas), axis=0),
+/home/ubuntu/rys/scripts/report.py:128: RuntimeWarning: Mean of empty slice
+  "zscore": np.nanmean(np.stack(zs), axis=0),
+Report saved to outputs-dinov3/report.md
+
+============================================================
+# RYS Scan Report
+
+- **Transformer layers:** 40
+- **Configs evaluated:** 820 / 820
+- **Probe:** nearest-centroid (cosine), zero training
+- **Ranking basis:** z-scored Δaccuracy on the RANDOM control split, averaged across datasets (the borderline split is reported for contrast but is selection-sensitive)
+
+## Probe Sets
+
+| Dataset | Classes | Refs | Borderline n | Random n | BL acc (border) | BL acc (rand) | Max noise Δacc |
+|---|---|---|---|---|---|---|---|
+| counting | 10 | 150 | 100 | 100 | 0.500 | 0.420 | +0.000 |
+| dtd | 47 | 235 | 100 | 100 | 0.500 | 0.750 | +0.000 |
+| eurosat | 10 | 150 | 100 | 100 | 0.500 | 0.950 | +0.011 |
+| fgvc_aircraft | 100 | 500 | 100 | 100 | 0.500 | 0.450 | +0.009 |
+| imagenet | 100 | 500 | 100 | 100 | 0.500 | 0.990 | -0.000 |
+| inside_outside | 2 | 100 | 100 | 100 | 0.940 | 1.000 | +0.000 |
+| places365 | 100 | 500 | 100 | 100 | 0.500 | 0.610 | +0.003 |
+| same_different | 2 | 100 | 100 | 100 | 0.500 | 0.930 | +0.025 |
+| spatial_relation | 4 | 152 | 100 | 100 | 0.500 | 0.990 | -0.000 |
+| stanford40 | 40 | 200 | 100 | 100 | 0.500 | 0.960 | +0.018 |
+| symmetry | 2 | 100 | 100 | 100 | 0.910 | 1.000 | +0.000 |
+
+*Max noise Δacc = largest mean Δaccuracy produced by pure iid Gaussian feature noise across tested magnitudes. This is a WEAK lower-bound null (duplication shifts features coherently, not iid); the matched null is the random-config control in stage-2 confirmation. Bootstrap CIs treat the datasets as fixed and are conditional on the reference sets.*
+
+## Top 10 Configs (z-scored Δacc, random split)
+
+| Rank | (i, j) | Block | z̄ | Δacc (rand) | 95% CI | Δacc (border) |
+|---|---|---|---|---|---|---|
+| 1 | (1, 32) | 31 | +0.301 | +0.0064 | [-0.003, +0.015] | +0.0455 |
+| 2 | (2, 32) | 30 | +0.301 | +0.0064 | [-0.003, +0.015] | +0.0409 |
+| 3 | (2, 31) | 29 | +0.295 | +0.0055 | [-0.004, +0.015] | +0.0345 |
+| 4 | (3, 32) | 29 | +0.270 | +0.0045 | [-0.005, +0.014] | +0.0355 |
+| 5 | (0, 31) | 31 | +0.268 | +0.0036 | [-0.006, +0.015] | +0.0473 |
+| 6 | (13, 31) | 18 | +0.259 | +0.0055 | [-0.001, +0.012] | +0.0345 |
+| 7 | (8, 32) | 24 | +0.256 | +0.0045 | [-0.004, +0.014] | +0.0245 |
+| 8 | (3, 31) | 28 | +0.255 | +0.0045 | [-0.004, +0.014] | +0.0273 |
+| 9 | (9, 32) | 23 | +0.252 | +0.0045 | [-0.004, +0.014] | +0.0345 |
+| 10 | (6, 32) | 26 | +0.249 | +0.0036 | [-0.005, +0.013] | +0.0264 |
+
+## Worst 5 Configs
+
+| Rank | (i, j) | Block | z̄ | Δacc (rand) |
+|---|---|---|---|---|
+| 1 | (0, 2) | 2 | -11.200 | -0.6500 |
+| 2 | (0, 3) | 3 | -10.923 | -0.6391 |
+| 3 | (0, 5) | 5 | -10.914 | -0.6382 |
+| 4 | (0, 4) | 4 | -10.914 | -0.6382 |
+| 5 | (0, 1) | 1 | -10.914 | -0.6382 |
+
+## Key Finding
+
+**No config survived stage-2 confirmation** — on fresh images, no top config both excludes zero and beats the random-config null (-0.0005 ± 0.0047). Sweep-stage positives were selection noise.
+
+### Best Config — Per-Dataset Δacc (random split)
+
+| Dataset | Baseline | Config | Δ |
+|---|---|---|---|
+| counting | 0.420 | 0.480 | +0.060 |
+| dtd | 0.750 | 0.750 | +0.000 |
+| eurosat | 0.950 | 0.950 | +0.000 |
+| fgvc_aircraft | 0.450 | 0.460 | +0.010 |
+| imagenet | 0.990 | 0.990 | +0.000 |
+| inside_outside | 1.000 | 1.000 | +0.000 |
+| places365 | 0.610 | 0.600 | -0.010 |
+| same_different | 0.930 | 0.950 | +0.020 |
+| spatial_relation | 0.990 | 0.990 | +0.000 |
+| stanford40 | 0.960 | 0.950 | -0.010 |
+| symmetry | 1.000 | 1.000 | +0.000 |
+
+## Summary Statistics (random split)
+
+- Mean Δacc across configs: -0.0067
+- Std: 0.0559
+- Positive configs: 228 / 820
+- Max: +0.0064   Min: -0.6500
+
+## Block Size Analysis (random split)
+
+| Block size | Mean Δacc | Best config | Best Δacc | N |
+|---|---|---|---|---|
+| 1 | -0.0159 | (23, 24) | +0.0018 | 40 |
+| 2 | -0.0165 | (21, 23) | +0.0018 | 39 |
+| 3 | -0.0167 | (26, 29) | +0.0036 | 38 |
+| 4 | -0.0170 | (22, 26) | +0.0036 | 37 |
+| 5 | -0.0174 | (26, 31) | +0.0055 | 36 |
+| 6 | -0.0178 | (21, 27) | +0.0055 | 35 |
+| 7 | -0.0093 | (20, 27) | +0.0055 | 34 |
+| 8 | -0.0032 | (20, 28) | +0.0045 | 33 |
+| 9 | -0.0005 | (23, 32) | +0.0036 | 32 |
+| 10 | -0.0003 | (20, 30) | +0.0045 | 31 |
+| 11 | -0.0005 | (19, 30) | +0.0045 | 30 |
+| 12 | -0.0006 | (18, 30) | +0.0045 | 29 |
+| 13 | -0.0007 | (17, 30) | +0.0045 | 28 |
+| 14 | -0.0010 | (16, 30) | +0.0036 | 27 |
+| 15 | -0.0009 | (16, 31) | +0.0045 | 26 |
+| 16 | -0.0009 | (15, 31) | +0.0045 | 25 |
+| 17 | -0.0012 | (14, 31) | +0.0036 | 24 |
+| 18 | -0.0013 | (13, 31) | +0.0055 | 23 |
+| 19 | -0.0016 | (12, 31) | +0.0036 | 22 |
+| 20 | -0.0018 | (12, 32) | +0.0027 | 21 |
+| 21 | -0.0018 | (11, 32) | +0.0045 | 20 |
+| 22 | -0.0024 | (10, 32) | +0.0036 | 19 |
+| 23 | -0.0030 | (9, 32) | +0.0045 | 18 |
+| 24 | -0.0028 | (8, 32) | +0.0045 | 17 |
+| 25 | -0.0032 | (6, 31) | +0.0027 | 16 |
+| 26 | -0.0039 | (6, 32) | +0.0036 | 15 |
+| 27 | -0.0047 | (4, 31) | +0.0036 | 14 |
+| 28 | -0.0046 | (3, 31) | +0.0045 | 13 |
+| 29 | -0.0048 | (2, 31) | +0.0055 | 12 |
+| 30 | -0.0045 | (2, 32) | +0.0064 | 11 |
+| 31 | -0.0047 | (1, 32) | +0.0064 | 10 |
+| 32 | -0.0071 | (0, 32) | +0.0018 | 9 |
+| 33 | -0.0085 | (0, 33) | -0.0018 | 8 |
+| 34 | -0.0103 | (0, 34) | -0.0064 | 7 |
+| 35 | -0.0098 | (1, 36) | -0.0073 | 6 |
+| 36 | -0.0095 | (0, 36) | -0.0045 | 5 |
+| 37 | -0.0109 | (0, 37) | -0.0082 | 4 |
+| 38 | -0.0112 | (2, 40) | -0.0073 | 3 |
+| 39 | -0.0100 | (1, 40) | -0.0073 | 2 |
+| 40 | -0.0073 | (0, 40) | -0.0073 | 1 |
+
+## Layer Anatomy Cross-Reference
+
+Content-dominant (candidate 'reasoning') layers — CLS pooling: layers 35–40; mean-patch pooling: layers 28–40. The Sapir-Whorf/RYS hypothesis predicts duplication tolerance inside this range and damage outside it — compare with the heatmaps. (CLS is the primary curve; mean-patch is background-sensitive.)
+
+## Heatmaps
+
+### counting
+![counting rand](heatmap_counting_rand_accuracy.png)
+
+### dtd
+![dtd rand](heatmap_dtd_rand_accuracy.png)
+
+### eurosat
+![eurosat rand](heatmap_eurosat_rand_accuracy.png)
+
+### fgvc_aircraft
+![fgvc_aircraft rand](heatmap_fgvc_aircraft_rand_accuracy.png)
+
+### imagenet
+![imagenet rand](heatmap_imagenet_rand_accuracy.png)
+
+### inside_outside
+![inside_outside rand](heatmap_inside_outside_rand_accuracy.png)
+
+### places365
+![places365 rand](heatmap_places365_rand_accuracy.png)
+
+### same_different
+![same_different rand](heatmap_same_different_rand_accuracy.png)
+
+### spatial_relation
+![spatial_relation rand](heatmap_spatial_relation_rand_accuracy.png)
+
+### stanford40
+![stanford40 rand](heatmap_stanford40_rand_accuracy.png)
+
+### symmetry
+![symmetry rand](heatmap_symmetry_rand_accuracy.png)
+
+### Aggregated (rand, z-scored)
+![aggregated](heatmap_aggregated_rand_accuracy_zscore.png)
+
+### Pareto
+![pareto](pareto_rand_accuracy.png)
+
+=== DONE ===

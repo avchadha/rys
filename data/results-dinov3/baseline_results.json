@@ -1,0 +1,134 @@
+{
+  "imagenet": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.6753010160707541,
+      "mean_correct_sim": 0.15048080682754517
+    },
+    "rand": {
+      "accuracy": 0.99,
+      "mrr": 0.9925,
+      "mean_correct_sim": 0.5373045206069946
+    }
+  },
+  "dtd": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.7206111111111112,
+      "mean_correct_sim": 0.2466035783290863
+    },
+    "rand": {
+      "accuracy": 0.75,
+      "mrr": 0.8333077984817114,
+      "mean_correct_sim": 0.40456652641296387
+    }
+  },
+  "eurosat": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.7433333333333333,
+      "mean_correct_sim": 0.7152751088142395
+    },
+    "rand": {
+      "accuracy": 0.95,
+      "mrr": 0.975,
+      "mean_correct_sim": 0.7973178029060364
+    }
+  },
+  "places365": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.7386666666666667,
+      "mean_correct_sim": 0.2504631280899048
+    },
+    "rand": {
+      "accuracy": 0.61,
+      "mrr": 0.702705537382008,
+      "mean_correct_sim": 0.3568336069583893
+    }
+  },
+  "stanford40": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.710234126984127,
+      "mean_correct_sim": 0.20596744120121002
+    },
+    "rand": {
+      "accuracy": 0.96,
+      "mrr": 0.9705882352941176,
+      "mean_correct_sim": 0.42200198769569397
+    }
+  },
+  "fgvc_aircraft": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.7416666666666667,
+      "mean_correct_sim": 0.8033867478370667
+    },
+    "rand": {
+      "accuracy": 0.45,
+      "mrr": 0.6118553459119497,
+      "mean_correct_sim": 0.7512620687484741
+    }
+  },
+  "counting": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.74,
+      "mean_correct_sim": 0.9477133750915527
+    },
+    "rand": {
+      "accuracy": 0.42,
+      "mrr": 0.6145952380952381,
+      "mean_correct_sim": 0.9296506643295288
+    }
+  },
+  "same_different": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.75,
+      "mean_correct_sim": 0.8254098296165466
+    },
+    "rand": {
+      "accuracy": 0.93,
+      "mrr": 0.965,
+      "mean_correct_sim": 0.8345766663551331
+    }
+  },
+  "spatial_relation": {
+    "hard": {
+      "accuracy": 0.5,
+      "mrr": 0.75,
+      "mean_correct_sim": 0.9563857913017273
+    },
+    "rand": {
+      "accuracy": 0.99,
+      "mrr": 0.995,
+      "mean_correct_sim": 0.9642606377601624
+    }
+  },
+  "symmetry": {
+    "hard": {
+      "accuracy": 0.91,
+      "mrr": 0.955,
+      "mean_correct_sim": 0.8884844779968262
+    },
+    "rand": {
+      "accuracy": 1.0,
+      "mrr": 1.0,
+      "mean_correct_sim": 0.9193316102027893
+    }
+  },
+  "inside_outside": {
+    "hard": {
+      "accuracy": 0.94,
+      "mrr": 0.97,
+      "mean_correct_sim": 0.8331453204154968
+    },
+    "rand": {
+      "accuracy": 1.0,
+      "mrr": 1.0,
+      "mean_correct_sim": 0.8717242479324341
+    }
+  }
+}
