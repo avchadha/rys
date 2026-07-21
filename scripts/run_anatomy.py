@@ -47,10 +47,22 @@ def main():
     loader = DataLoader(grid, batch_size=args.batch_size, shuffle=False,
                         num_workers=2)
 
+    import numpy as np
+
     results = {}
     for pool in ("mean_patch", "cls"):
         print(f"Extracting layerwise features (pool={pool})...")
         feats = extract_layerwise_features(scanner, loader, pool=pool)
+
+        # Persist raw per-layer features (fp16) so any curve, PCA view, or
+        # alternative pairing analysis can be regenerated without GPU time.
+        np.savez_compressed(
+            os.path.join(args.output_dir, f"anatomy_features_{pool}.npz"),
+            features=feats.astype(np.float16),
+            content_labels=grid.content_labels,
+            style_labels=grid.style_labels,
+        )
+
         curves = centered_similarity_curves(
             feats, grid.content_labels, grid.style_labels
         )

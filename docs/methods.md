@@ -73,6 +73,48 @@ similarity is the trained metric.
   intervention. (The final projection to the joint text-image space is not
   applied; post-LN CLS is the last vision-native representation.)
 
+### 2.1 Second arm: DINOv3 ViT-7B/16 (objective ablation)
+
+**facebook/dinov3-vit7b16-pretrain-lvd1689m** (Meta, 2025): ~7B parameters,
+40 blocks → 820 duplication configs, hidden 4096, patch 16 at 224×224 →
+201 tokens (CLS + 4 register tokens + 196 patches), RoPE position encoding,
+trained by image-only self-supervised distillation on 1.7B images
+(LVD-1689M) — **no text supervision anywhere**.
+
+*Rationale.* The anatomy caveat for EVA-CLIP (§7.4) is that a
+contrastively trained model may legitimately treat rendering style and
+background as content, because captions describe them. DINOv3 is the
+largest open-weights ViT with a purely visual objective, so running the
+**identical experiment** (same datasets, probe sets construction, splits,
+noise control, sweep, k-repeats, confirmation, anatomy) on it turns that
+caveat into a test: a content band in DINOv3 but not EVA-CLIP implicates
+the training objective; a band in neither generalizes the negative result
+across objectives. Model is the ONLY variable changed between arms.
+
+Arm-specific implementation facts (verified: the scanner's manual forward
+reproduces the model's own `forward` to 0 ulp on a random-init config):
+
+- transformers-native `DINOv3ViTModel` (no remote code); processor via
+  `AutoImageProcessor` from the same repo. Requires `transformers ≥ 4.56`,
+  which conflicts with the EVA arm's `< 4.50` pin → **each arm runs in its
+  own virtualenv** (`.venv` / `.venv-dino`) with the same experiment code.
+- Blocks at `model.layer`, called as `layer(h, None, rope)`; RoPE tensors
+  are computed once per input by `rope_embeddings(pixel_values)` and shared
+  by all layers (the scanner's embed hook stashes them; they depend only on
+  the fixed 224×224 grid).
+- **Feature space: final `norm` + CLS** — the model's own pooling path,
+  mirroring the post-LN-CLS decision of the EVA arm.
+- Patch pooling in the anatomy skips `num_prefix_tokens = 5` (CLS + 4
+  register tokens); EVA uses 1. Set per model by the registry.
+- Gated repo (Meta license acceptance required per HF account).
+
+**Arm ordering and prediction registration.** The DINOv3 arm is queued to
+start automatically when the EVA arm's pipeline (sweep + confirmation +
+report) completes; its anatomy runs and its prediction is recorded before
+its own sweep produces results, exactly as in §7.3. Results land in
+`results-dinov3/` + `outputs-dinov3/`, fully parallel to the EVA arm's
+`results/` + `outputs/`.
+
 ---
 
 ## 3. Intervention: layer duplication
@@ -400,6 +442,33 @@ automatically a failure to abstract; the sweep adjudicates (§1).
   started 2026-07-21 on `DATASETS=all` (11 datasets; ImageNet access
   granted before the sweep stage loaded datasets, so ImageNet-100 is
   included in the main sweep rather than appended).
+
+### 8.1 Data-retention policy (full plot-regeneration guarantee)
+
+Every figure and table is derivable offline from persisted artifacts — no
+GPU time, recomputation, or memory of the run is needed to regenerate,
+restyle, or combine plots. Per arm (`results/`, `results-dinov3/`):
+
+| Artifact | Contents |
+|---|---|
+| `{ds}_{split}_{accuracy,mrr}_matrix.npy` | full (L, L+1) score matrices, all 4 split×metric combinations, per dataset |
+| `{ds}_percase.npz` | per-image correctness bitmap + true-class rank for every (config, split), plus the config index |
+| `{ds}_baseline_features.npz` | baseline embeddings + labels for reference/borderline/random sets (enables re-running noise controls, baseline per-image outcomes, any new probe variant in baseline space) |
+| `probe_sets.json` | every selected image index (refs, candidates, borderline, random) — exact probe-set reconstruction |
+| `probe_meta.json` | class counts, per-dataset baselines, full noise-control distributions |
+| `baseline_results.json` | baseline scores per dataset × split |
+| `scan_log.jsonl` | append-only per-config score log with timestamps implicit in order |
+| `{ds}_repeats.json` | k-repeat scores per (layer, k) × split |
+| `aggregated_{split}_{metric}_{delta,zscore}.npy` | aggregate matrices (also recomputable from the per-dataset files) |
+| `confirm_results.json` | stage-2 per-config deltas, CIs, control statistics, per-dataset breakdown |
+| `confirm_percase.npz` | stage-2 per-image outcomes (config + baseline), fresh-test indices/labels, resampled reference indices, per dataset |
+| `anatomy/anatomy.json` | all similarity curves (4 categories × 2 poolings) + content-dominant layer sets |
+| `anatomy/anatomy_features_{pool}.npz` | raw per-layer pooled features (fp16, (L+1, 128, D)) + content/style labels — any alternative pairing, pooling comparison, or PCA view is recomputable |
+
+Synthetic stimuli (including the anatomy grid) are seed-deterministic, so
+image-level artifacts are reproducible from code + `probe_sets.json`
+without storing images. Results are additionally rsynced off the GPU box to
+local storage at monitoring intervals and at completion.
 
 ## 9. Presentation conventions
 

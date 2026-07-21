@@ -47,6 +47,9 @@ def extract_layerwise_features(scanner, dataloader, pool="mean_patch"):
         (num_layers + 1, N, D) float32 numpy array; index 0 is the
         embedding output, index k is the state after block k-1.
     """
+    # Patch tokens start after the model's prefix tokens (CLS for EVA;
+    # CLS + 4 register tokens for DINOv3) — set by the model registry.
+    n_prefix = getattr(scanner, "num_prefix_tokens", 1)
     per_layer = None
     for images, _ in dataloader:
         cached = scanner.cache_baseline_states(images)
@@ -54,7 +57,7 @@ def extract_layerwise_features(scanner, dataloader, pool="mean_patch"):
             per_layer = [[] for _ in cached]
         for k, state in enumerate(cached):
             if pool == "mean_patch":
-                pooled = state[:, 1:].mean(dim=1)
+                pooled = state[:, n_prefix:].mean(dim=1)
             elif pool == "cls":
                 pooled = state[:, 0]
             else:

@@ -16,6 +16,7 @@ cd "$(dirname "$0")/.."
 DATA_DIR="${DATA_DIR:-$HOME/rys_data}"
 RESULTS="${RESULTS:-results}"
 MODEL="${MODEL:-eva18b}"
+OUTPUTS="${OUTPUTS:-outputs}"
 PY="${PY:-python3}"
 # DATASETS: optional space-separated list for the sweep, e.g. "all" to
 # include gated ImageNet (needs `huggingface-cli login` + accepted terms).
@@ -58,7 +59,7 @@ echo "=== [4/5] Stage-2 confirmation ==="
     --top-k 20 --n-random-configs 20 --n-test 500 --allow-missing-datasets
 
 echo "=== [5/5] Heatmaps + report ==="
-"$PY" visualization/heatmap.py --results-dir "$RESULTS" --output-dir outputs
-"$PY" scripts/report.py --results-dir "$RESULTS" --output-path outputs/report.md
+"$PY" visualization/heatmap.py --results-dir "$RESULTS" --output-dir "$OUTPUTS"
+"$PY" scripts/report.py --results-dir "$RESULTS" --output-path "$OUTPUTS/report.md"
 
 echo "=== DONE ==="

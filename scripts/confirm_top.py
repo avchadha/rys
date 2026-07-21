@@ -128,6 +128,9 @@ def main():
                "per_config": {}}
     correct_by_cfg = {cfg: {} for cfg in configs}
     bl_correct = {}
+    percase_arrays = {}  # raw per-image outcomes, persisted for reanalysis
+    percase_arrays["configs"] = np.array([[c[0], c[1]] for c in configs],
+                                         dtype=np.int32)
 
     for ds_name, (train_ds, test_ds) in benchmark.items():
         meta = probe_sets_meta.get(ds_name)
@@ -162,6 +165,8 @@ def main():
         print(f"  [{ds_name}] baseline acc={d['correct'].mean():.3f}")
 
         # Configs (grouped to bound memory)
+        ds_correct = np.full((len(configs), n), -1, dtype=np.int8)
+        ds_rank = np.full((len(configs), n), -1, dtype=np.int32)
         for k in range(0, len(configs), 25):
             group = configs[k: k + 25]
             ref_feats = extract_features_for_configs(scanner, ref_loader, group)
@@ -172,9 +177,25 @@ def main():
                     test_feats[cfg], fresh_labels, cents
                 )
                 correct_by_cfg[cfg][ds_name] = dd["correct"].astype(float)
+                row = configs.index(cfg)
+                ds_correct[row] = dd["correct"].astype(np.int8)
+                ds_rank[row] = dd["rank"].astype(np.int32)
             del ref_feats, test_feats
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
+        percase_arrays[f"{ds_name}__correct"] = ds_correct
+        percase_arrays[f"{ds_name}__rank"] = ds_rank
+        percase_arrays[f"{ds_name}__bl_correct"] = d["correct"].astype(np.int8)
+        percase_arrays[f"{ds_name}__bl_rank"] = d["rank"].astype(np.int32)
+        percase_arrays[f"{ds_name}__fresh_indices"] = fresh_idx.astype(np.int64)
+        percase_arrays[f"{ds_name}__fresh_labels"] = fresh_labels
+        percase_arrays[f"{ds_name}__ref_indices"] = np.array(ref_indices,
+                                                             dtype=np.int64)
+        np.savez_compressed(
+            os.path.join(args.results_dir, "confirm_percase.npz"),
+            **percase_arrays,
+        )
 
     # Analysis: paired bootstrap per config across datasets
     rows = []

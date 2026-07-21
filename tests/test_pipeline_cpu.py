@@ -131,6 +131,14 @@ def test_full_pipeline(monkeypatch, workdir):
     for row in confirm["per_config"]:
         assert row["ci_lo"] <= row["delta_acc"] <= row["ci_hi"]
 
+    # Stage-2 per-image outcomes persisted for reanalysis
+    z = np.load(os.path.join(results, "confirm_percase.npz"))
+    assert z["configs"].shape == (6, 2)
+    assert (z["counting__correct"] >= 0).all()
+    assert z["counting__correct"].shape == (6, 40)
+    assert len(z["counting__fresh_indices"]) == 40
+    assert len(z["counting__ref_indices"]) > 0
+
 
 def test_anatomy_pipeline(monkeypatch, workdir):
     import scripts.run_anatomy as run_anatomy
@@ -146,3 +154,9 @@ def test_anatomy_pipeline(monkeypatch, workdir):
     assert len(anatomy["mean_patch"]["same_content"]) == 7  # 6 layers + emb
     assert os.path.exists(os.path.join(outdir, "anatomy_mean_patch.png"))
     assert os.path.exists(os.path.join(outdir, "anatomy_pca_cls.png"))
+
+    # Raw per-layer features persisted (fp16) for plot regeneration
+    z = np.load(os.path.join(outdir, "anatomy_features_cls.npz"))
+    assert z["features"].shape == (7, 128, 16)
+    assert z["features"].dtype == np.float16
+    assert len(z["content_labels"]) == 128
