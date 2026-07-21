@@ -255,19 +255,38 @@ class TestSyntheticConfounds:
 
 class TestAnatomy:
     def test_grid_structure(self):
-        grid = StyleContentGrid()
+        grid = StyleContentGrid(n_instances=1)
         assert len(grid) == len(SHAPE_NAMES) * len(STYLE_NAMES) == 64
         img, label = grid[0]
         assert img.size == (448, 448)
         assert label == grid.content_labels[0]
+        assert len(StyleContentGrid()) == 128  # default: 2 instances/cell
 
     def test_pair_categories_counts(self):
-        grid = StyleContentGrid()
+        grid = StyleContentGrid(n_instances=1)
         _iu, _ju, cat = pair_categories(grid.content_labels, grid.style_labels)
-        # 8x8 grid: C(8,2)*8 = 224 same-content and 224 same-style pairs
+        # 8x8 grid, 1/cell: C(8,2)*8 = 224 same-content and 224 same-style
         assert (cat == 0).sum() == 224
         assert (cat == 1).sum() == 224
         assert (cat == 2).sum() == 1568
+        assert (cat == 3).sum() == 0
+
+        grid2 = StyleContentGrid()  # 2 instances/cell, n=128
+        _iu, _ju, cat2 = pair_categories(grid2.content_labels, grid2.style_labels)
+        # per content: C(16,2)=120 pairs, minus 8 same-style-same-content
+        assert (cat2 == 0).sum() == 8 * (120 - 8)
+        assert (cat2 == 1).sum() == 8 * (120 - 8)
+        assert (cat2 == 3).sum() == 64
+        assert (cat2 == 2).sum() == 128 * 127 // 2 - 2 * 896 - 64
+
+    def test_same_both_curve_present(self):
+        grid = StyleContentGrid()
+        rng = np.random.default_rng(0)
+        feats = rng.normal(size=(1, len(grid), 8))
+        curves = centered_similarity_curves(
+            feats, grid.content_labels, grid.style_labels
+        )
+        assert "same_both" in curves and len(curves["same_both"]) == 1
 
     def test_curves_detect_planted_structure(self):
         """Features organized by content must yield content > style."""

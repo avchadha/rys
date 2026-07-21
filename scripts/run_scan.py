@@ -382,9 +382,12 @@ def scan_dataset(scanner, ds_name, probe, all_configs, args, loader_kwargs):
             with open(log_path, "a") as f:
                 f.write(json.dumps(record) + "\n")
 
+        # percase first: matrices are the completion signal for resume, so
+        # they must be the LAST write (a crash between the two would
+        # otherwise mark configs complete with per-image rows still at -1)
+        np.savez_compressed(percase_path, **percase)
         for key, path in paths.items():
             np.save(path, matrices[key])
-        np.savez_compressed(percase_path, **percase)
 
         done = int(np.sum(~np.isnan(matrices[("hard", "accuracy")][mask])))
         print(f"  [{ds_name}] Group {g_idx + 1}/{len(config_groups)} "

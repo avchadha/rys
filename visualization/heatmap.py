@@ -144,7 +144,8 @@ def plot_repeats(results_dir, output_dir):
             ax.set_ylabel("accuracy")
             ax.set_title(f"{ds_name} — {split} split")
             ax.legend()
-        fig.suptitle(f"{ds_name}: single layer repeated k times")
+        fig.suptitle(f"{ds_name}: single layer repeated k times "
+                     "(exploratory — no CIs)")
         plt.tight_layout()
         out = os.path.join(output_dir, f"repeats_{ds_name}.png")
         plt.savefig(out, dpi=150)

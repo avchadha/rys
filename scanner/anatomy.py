@@ -74,8 +74,9 @@ def pair_categories(content_labels, style_labels):
     """Index arrays (iu, ju) and a category id per pair.
 
     Categories: 0 = same content / diff style, 1 = same style / diff content,
-    2 = diff content / diff style. (Same content AND same style pairs do not
-    exist in the 8x8 grid — one image per cell.)
+    2 = diff content / diff style, 3 = same content AND same style
+    (different jitter instances — a ceiling reference, excluded from the
+    content-vs-style comparison).
     """
     n = len(content_labels)
     iu, ju = np.triu_indices(n, k=1)
@@ -84,6 +85,7 @@ def pair_categories(content_labels, style_labels):
     cat = np.full(len(iu), 2)
     cat[same_c & ~same_s] = 0
     cat[~same_c & same_s] = 1
+    cat[same_c & same_s] = 3
     return iu, ju, cat
 
 
@@ -101,25 +103,30 @@ def centered_similarity_curves(features, content_labels, style_labels):
         np.asarray(content_labels), np.asarray(style_labels)
     )
 
-    curves = {0: [], 1: [], 2: []}
+    has_same_both = bool((cat == 3).any())
+    cats = (0, 1, 2, 3) if has_same_both else (0, 1, 2)
+    curves = {c: [] for c in cats}
     for layer_feats in features:
         norms = np.linalg.norm(layer_feats, axis=1, keepdims=True)
         normed = layer_feats / (norms + 1e-8)
         sims = (normed[iu] * normed[ju]).sum(axis=1)
         sims = sims - sims.mean()  # per-layer centering
-        for c in (0, 1, 2):
+        for c in cats:
             curves[c].append(float(sims[cat == c].mean()))
 
     same_content = np.array(curves[0])
     same_style = np.array(curves[1])
     reasoning = np.where(same_content > same_style)[0]
 
-    return {
+    out = {
         "same_content": curves[0],
         "same_style": curves[1],
         "different": curves[2],
         "reasoning_layers": reasoning.tolist(),
     }
+    if has_same_both:
+        out["same_both"] = curves[3]
+    return out
 
 
 def plot_anatomy(curves, output_path, title="ViT layer anatomy"):
@@ -134,6 +141,9 @@ def plot_anatomy(curves, output_path, title="ViT layer anatomy"):
             label="same style, different content")
     ax.plot(x, curves["different"], color="tab:gray", lw=1.5, ls="--",
             label="different content and style")
+    if "same_both" in curves:
+        ax.plot(x, curves["same_both"], color="tab:purple", lw=1, ls=":",
+                label="same content and style (ceiling)")
 
     reasoning = curves.get("reasoning_layers", [])
     if reasoning:

@@ -16,39 +16,42 @@ cd "$(dirname "$0")/.."
 DATA_DIR="${DATA_DIR:-$HOME/rys_data}"
 RESULTS="${RESULTS:-results}"
 MODEL="${MODEL:-eva18b}"
+PY="${PY:-python3}"
 
 mkdir -p "$DATA_DIR" "$RESULTS"
 
 echo "=== [0/5] Model loading sanity check ==="
-python scripts/test_model_loading.py --model "$MODEL"
+"$PY" scripts/test_model_loading.py --model "$MODEL"
 
 echo "=== [1/5] Layer anatomy ==="
 if [ ! -f "$RESULTS/anatomy/anatomy.json" ]; then
-    python scripts/run_anatomy.py --model "$MODEL" --output-dir "$RESULTS/anatomy"
+    "$PY" scripts/run_anatomy.py --model "$MODEL" --output-dir "$RESULTS/anatomy"
 else
     echo "  anatomy.json exists, skipping"
 fi
 
 echo "=== [2/5] Smoke scan (eurosat) ==="
 if [ ! -f "$RESULTS/.smoke_ok" ]; then
-    python scripts/run_scan.py \
+    "$PY" scripts/run_scan.py \
         --data-dir "$DATA_DIR" --output-dir "$RESULTS" --model "$MODEL" \
         --datasets eurosat --resume
     touch "$RESULTS/.smoke_ok"
 fi
 
 echo "=== [3/5] Full sweep ==="
-python scripts/run_scan.py \
+# --allow-missing-datasets: one flaky mirror (usually Places365) must not
+# abort the sweep; a later --resume run picks up whatever was missing.
+"$PY" scripts/run_scan.py \
     --data-dir "$DATA_DIR" --output-dir "$RESULTS" --model "$MODEL" \
-    --repeat-scan --resume
+    --repeat-scan --resume --allow-missing-datasets
 
 echo "=== [4/5] Stage-2 confirmation ==="
-python scripts/confirm_top.py \
+"$PY" scripts/confirm_top.py \
     --data-dir "$DATA_DIR" --results-dir "$RESULTS" --model "$MODEL" \
-    --top-k 20 --n-random-configs 20 --n-test 500
+    --top-k 20 --n-random-configs 20 --n-test 500 --allow-missing-datasets
 
 echo "=== [5/5] Heatmaps + report ==="
-python visualization/heatmap.py --results-dir "$RESULTS" --output-dir outputs
-python scripts/report.py --results-dir "$RESULTS" --output-path outputs/report.md
+"$PY" visualization/heatmap.py --results-dir "$RESULTS" --output-dir outputs
+"$PY" scripts/report.py --results-dir "$RESULTS" --output-path outputs/report.md
 
 echo "=== DONE ==="

@@ -39,6 +39,32 @@ from scripts.run_scan import (
 )
 
 
+def resample_reference_indices(train_ds, meta, seed=1337):
+    """Fresh reference images for the confirmation stage.
+
+    Sweep-stage configs were selected partly for favorable interaction with
+    the sweep's specific few-shot centroids; reusing those refs would carry
+    that component of the winner's curse into stage 2. Prefer images the
+    sweep never used; fall back to sweep refs only when a class is too small.
+    """
+    labels = get_labels(train_ds)
+    sweep_refs = set(meta["ref_indices"])
+    n_per_class = meta["n_ref_per_class"]
+    rng = np.random.default_rng(seed)
+
+    indices = []
+    for label in meta["class_subset"]:
+        class_idx = np.where(labels == label)[0]
+        fresh = np.array([i for i in class_idx if i not in sweep_refs])
+        take = min(n_per_class, len(fresh))
+        chosen = rng.choice(fresh, take, replace=False).tolist() if take else []
+        if take < n_per_class:  # tiny class: top up from sweep refs
+            used = [i for i in class_idx if i in sweep_refs]
+            chosen += used[: n_per_class - take]
+        indices.extend(int(i) for i in chosen)
+    return indices, labels[indices]
+
+
 def pick_configs(results_dir, num_layers, top_k, n_random, seed=99):
     """Top-K configs by z-scored rand-split aggregate + random controls."""
     agg = np.load(os.path.join(
@@ -109,8 +135,8 @@ def main():
             print(f"  [{ds_name}] no probe set from sweep — skipping")
             continue
 
-        ref_ds = Subset(train_ds, meta["ref_indices"])
-        ref_labels_arr = get_labels(ref_ds)
+        ref_indices, ref_labels_arr = resample_reference_indices(train_ds, meta)
+        ref_ds = Subset(train_ds, ref_indices)
 
         # Fresh test sample: exclude every image the sweep touched
         labels_test = get_labels(test_ds)

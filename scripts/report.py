@@ -166,8 +166,12 @@ def generate_report(results_dir="results", output_path="outputs/report.md",
         )
     lines.append("")
     lines.append("*Max noise Δacc = largest mean Δaccuracy produced by pure "
-                 "Gaussian feature noise across tested magnitudes — the null "
-                 "any real effect must beat.*\n")
+                 "iid Gaussian feature noise across tested magnitudes. This "
+                 "is a WEAK lower-bound null (duplication shifts features "
+                 "coherently, not iid); the matched null is the "
+                 "random-config control in stage-2 confirmation. Bootstrap "
+                 "CIs treat the datasets as fixed and are conditional on "
+                 "the reference sets.*\n")
 
     # Top configs with bootstrap CIs on the random split
     lines.append(f"## Top {top_k} Configs (z-scored Δacc, random split)\n")
@@ -214,26 +218,54 @@ def generate_report(results_dir="results", output_path="outputs/report.md",
         )
     lines.append("")
 
-    # Key finding
+    # Key finding — a POSITIVE claim is only ever made from stage-2
+    # confirmation results (fresh images, random-config controls). The
+    # sweep CI alone cannot support it: the max of ~1176 configs has an
+    # inflated CI by selection (winner's curse).
+    confirm_path = os.path.join(results_dir, "confirm_results.json")
+    confirm = None
+    if os.path.exists(confirm_path):
+        with open(confirm_path) as f:
+            confirm = json.load(f)
+
     lines.append("## Key Finding\n")
-    if ranked:
+    if confirm and confirm.get("per_config"):
+        ctrl_mu = confirm.get("control_mean", 0.0)
+        ctrl_sd = confirm.get("control_std", 0.0)
+        winners = [
+            r for r in confirm["per_config"]
+            if r["kind"] == "top" and r["ci_lo"] > 0
+            and r["delta_acc"] > ctrl_mu + 2 * ctrl_sd
+        ]
+        if winners:
+            w = winners[0]
+            lines.append(
+                f"**Layer duplication improved performance (confirmed on "
+                f"fresh images)**: config {tuple(w['config'])} has stage-2 "
+                f"Δacc {w['delta_acc']:+.4f} "
+                f"(95% CI [{w['ci_lo']:+.3f}, {w['ci_hi']:+.3f}]), beating "
+                f"the random-config null ({ctrl_mu:+.4f} ± {ctrl_sd:.4f}). "
+                f"{len(winners)} of the top configs confirmed.\n"
+            )
+        else:
+            lines.append(
+                "**No config survived stage-2 confirmation** — on fresh "
+                "images, no top config both excludes zero and beats the "
+                f"random-config null ({ctrl_mu:+.4f} ± {ctrl_sd:.4f}). "
+                "Sweep-stage positives were selection noise.\n"
+            )
+    elif ranked:
         bi, bj = ranked[0]
         boot = bootstrap_for((bi, bj), "rand")
-        if boot and boot[1] > 0:
-            verdict = ("**Layer duplication improved performance**: config "
-                       f"({bi}, {bj}) has a random-split Δacc 95% CI of "
-                       f"[{boot[1]:+.3f}, {boot[2]:+.3f}], excluding zero.")
-        elif boot:
-            verdict = ("**No config shows a significant improvement** on the "
-                       f"unbiased random split — best config ({bi}, {bj}) CI "
-                       f"[{boot[1]:+.3f}, {boot[2]:+.3f}] includes zero. "
-                       "NOTE: with 1176 configs, the selected maximum is "
-                       "inflated (winner's curse); confirm with "
-                       "scripts/confirm_top.py on fresh images before "
-                       "claiming an effect.")
-        else:
-            verdict = f"Best config: ({bi}, {bj}). Per-image data unavailable for CI."
-        lines.append(verdict + "\n")
+        ci = (f" (sweep CI [{boot[1]:+.3f}, {boot[2]:+.3f}])" if boot else "")
+        lines.append(
+            f"**Unconfirmed** — best sweep config ({bi}, {bj}){ci}. This is "
+            "the maximum over ~1176 configs and is inflated by selection; "
+            "run scripts/confirm_top.py before drawing any conclusion.\n"
+        )
+
+    if ranked:
+        bi, bj = ranked[0]
 
         lines.append("### Best Config — Per-Dataset Δacc (random split)\n")
         lines.append("| Dataset | Baseline | Config | Δ |")
@@ -278,20 +310,30 @@ def generate_report(results_dir="results", output_path="outputs/report.md",
     if os.path.exists(anatomy_path):
         with open(anatomy_path) as f:
             anatomy = json.load(f)
-        rl = anatomy.get("mean_patch", {}).get("reasoning_layers", [])
+        # CLS is primary: mean-patch pooling is dominated by the (style-
+        # varying) background, which can suppress content curves at every
+        # layer for reasons unrelated to the model's organization.
+        rl_cls = anatomy.get("cls", {}).get("reasoning_layers", [])
+        rl_mp = anatomy.get("mean_patch", {}).get("reasoning_layers", [])
         lines.append("## Layer Anatomy Cross-Reference\n")
-        if rl:
+        if rl_cls or rl_mp:
+            parts = []
+            if rl_cls:
+                parts.append(f"CLS pooling: layers {min(rl_cls)}–{max(rl_cls)}")
+            if rl_mp:
+                parts.append(f"mean-patch pooling: layers {min(rl_mp)}–{max(rl_mp)}")
             lines.append(
-                f"The style/content anatomy analysis found content-dominant "
-                f"(candidate 'reasoning') layers **{min(rl)}–{max(rl)}**. "
+                "Content-dominant (candidate 'reasoning') layers — "
+                + "; ".join(parts) + ". "
                 "The Sapir-Whorf/RYS hypothesis predicts duplication "
                 "tolerance inside this range and damage outside it — "
-                "compare with the heatmaps.\n"
+                "compare with the heatmaps. (CLS is the primary curve; "
+                "mean-patch is background-sensitive.)\n"
             )
         else:
-            lines.append("Anatomy analysis found no content-dominant region — "
-                         "under the RYS hypothesis, duplication should mostly "
-                         "hurt this model.\n")
+            lines.append("Anatomy analysis found no content-dominant region "
+                         "under either pooling — under the RYS hypothesis, "
+                         "duplication should mostly hurt this model.\n")
 
     # Heatmap references
     lines.append("## Heatmaps\n")

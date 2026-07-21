@@ -120,34 +120,36 @@ class CountingDataset(Dataset):
     def _gen_params(self, rng, count):
         s = self.size
         bg = _random_color(rng)
-        dots = []
-        for _ in range(count):
-            # Rejection-sample so dots never overlap or touch: merged blobs
-            # would make the visible count smaller than the label.
-            for _attempt in range(200):
-                r = int(rng.integers(12, 40))
-                x = int(rng.integers(r + 5, s - r - 5))
-                y = int(rng.integers(r + 5, s - r - 5))
-                if all(
-                    (x - ox) ** 2 + (y - oy) ** 2 > (r + orad + 6) ** 2
-                    for ox, oy, orad, _ in dots
-                ):
-                    break
-                r = None
-            if r is None:
-                # Canvas too crowded with large radii — retry with small dot
-                r = 12
-                for _attempt in range(500):
+
+        # Dots must never overlap or touch (merged blobs would make the
+        # visible count smaller than the label). Radii are drawn FIRST,
+        # independently of placement success, so the radius distribution
+        # does not shift with count; only positions are rejection-sampled,
+        # and on failure the whole layout restarts with fresh radii.
+        for _layout_attempt in range(100):
+            radii = [int(rng.integers(12, 40)) for _ in range(count)]
+            dots = []
+            ok = True
+            for r in sorted(radii, reverse=True):  # place big dots first
+                for _attempt in range(300):
                     x = int(rng.integers(r + 5, s - r - 5))
                     y = int(rng.integers(r + 5, s - r - 5))
                     if all(
                         (x - ox) ** 2 + (y - oy) ** 2 > (r + orad + 6) ** 2
                         for ox, oy, orad, _ in dots
                     ):
+                        dots.append((x, y, r, _random_color(rng)))
                         break
-            color = _random_color(rng)
-            dots.append((x, y, r, color))
-        return (bg, dots)
+                else:
+                    ok = False
+                    break
+            if ok:
+                return (bg, dots)
+
+        raise RuntimeError(
+            f"CountingDataset: could not place {count} non-overlapping dots "
+            "after 100 layout attempts."
+        )
 
     def _render(self, params):
         bg, dots = params
@@ -460,9 +462,11 @@ class InsideOutsideDataset(Dataset):
         #      visible margin, so the label is never visually ambiguous
         #      (esp. after 448 -> 224 downscaling).
         #   2. Annulus band: the dot's distance from the polygon center
-        #      must lie in a band where BOTH classes occur (the contour
-        #      radius spans 0.6-1.0 x contour_r), so distance-from-center
-        #      is not a shortcut for inside/outside.
+        #      must lie in a band where both classes CAN occur (the contour
+        #      radius spans 0.6-1.0 x contour_r). This WEAKENS the
+        #      distance-from-center shortcut but does not eliminate it:
+        #      inside dots concentrate below ~1.0R, outside dots above —
+        #      interpret this probe's results with that caveat.
         for _contour_attempt in range(50):
             cx = s // 2 + int(rng.integers(-30, 30))
             cy = s // 2 + int(rng.integers(-30, 30))

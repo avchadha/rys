@@ -212,24 +212,28 @@ STYLE_RENDERERS = {
 
 
 class StyleContentGrid(Dataset):
-    """64-image grid: every (shape, style) combination, deterministic.
+    """Every (shape, style) combination, n_instances jittered draws per cell.
 
-    __getitem__ returns (image, content_idx); style/content indices are
-    also available via .content_labels / .style_labels.
+    Default 8 x 8 x 2 = 128 images. __getitem__ returns (image, content_idx);
+    style/content indices are also available via .content_labels /
+    .style_labels. Multiple instances per cell stabilize the pairwise
+    similarity curves (a single draw per cell rests the whole analysis on
+    one jitter sample).
     """
 
-    def __init__(self, transform=None, seed=42):
+    def __init__(self, transform=None, seed=42, n_instances=2):
         self.transform = transform
         self.cells = [
             (ci, si)
             for ci in range(len(SHAPE_NAMES))
             for si in range(len(STYLE_NAMES))
+            for _inst in range(n_instances)
         ]
         self.content_labels = np.array([c for c, _ in self.cells])
         self.style_labels = np.array([s for _, s in self.cells])
         self.targets = self.content_labels.tolist()
 
-        # Per-cell deterministic jitter so same-content pairs differ at
+        # Per-sample deterministic jitter so same-content pairs differ at
         # the pixel level and the model must abstract shape identity.
         rng = np.random.default_rng(seed)
         self._jitter = []
