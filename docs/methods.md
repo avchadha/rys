@@ -595,7 +595,42 @@ and per-layer PCA panels.
 - **Natural-image anatomy stimuli** (e.g. photo/sketch/painting domains of
   the same object classes) to complement the procedural grid.
 
-## 12. Known limitations (to state in the paper)
+## 12. Phase 1 empirical record (EVA arm, 2026-07-21)
+
+Baseline nearest-centroid accuracy (candidates / borderline split / random
+split) and the noise-control null, as measured before any duplication
+config was scored:
+
+| dataset | classes | refs | cand | borderline | rand | max noise Δacc |
+|---|---|---|---|---|---|---|
+| imagenet-100 | 100 | 500 | 0.925 | 0.500 | 0.960 | +0.002 |
+| eurosat | 10 | 150 | 0.899 | 0.500 | 0.930 | +0.000 |
+| stanford40 | 40 | 200 | 0.862 | 0.500 | 0.920 | +0.008 |
+| inside_outside | 2 | 100 | 0.839 | 0.500 | 0.900 | +0.009 |
+| spatial_relation | 4 | 152 | 0.818 | 0.500 | 0.800 | +0.004 |
+| same_different | 2 | 100 | 0.711 | 0.500 | 0.820 | +0.007 |
+| fgvc_aircraft | 100 | 500 | 0.691 | 0.500 | 0.730 | +0.000 |
+| dtd | 47 | 235 | 0.684 | 0.500 | 0.750 | +0.006 |
+| places365-100 | 100 | 500 | 0.587 | 0.500 | 0.600 | +0.000 |
+| counting | 10 | 150 | 0.392 | 0.500 | 0.390 | +0.000 |
+| symmetry | 2 | 100 | 1.000 | 1.000 | 1.000 | +0.000 |
+
+Notes for interpretation:
+
+- Borderline splits landed at exactly 0.500 everywhere stratification was
+  possible, and the noise null is ≤ +0.9pp on all datasets — empirical
+  confirmation that the selection debiasing behaves as designed.
+- **Symmetry is at ceiling** (100% on 1000 candidates): EVA-CLIP separates
+  mirrored from non-mirrored dot patterns perfectly, so this probe is
+  one-sided for this model — it can only detect degradation, its borderline
+  split is degenerate (no misclassified candidates existed; the split
+  contains only correct images at 1.000 baseline), and it contributes no
+  upside signal to aggregates. A notable capability observation in its own
+  right.
+- Counting at 0.392 (chance 0.10) shows genuine but far-from-ceiling
+  numerosity signal — the most headroom of any probe in both directions.
+
+## 13. Known limitations (to state in the paper)
 
 1. Embedding-geometry probes, not behavioral ones: the original RYS scored
    generative task performance of the full model; we score representation
