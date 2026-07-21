@@ -17,6 +17,13 @@ DATA_DIR="${DATA_DIR:-$HOME/rys_data}"
 RESULTS="${RESULTS:-results}"
 MODEL="${MODEL:-eva18b}"
 PY="${PY:-python3}"
+# DATASETS: optional space-separated list for the sweep, e.g. "all" to
+# include gated ImageNet (needs `huggingface-cli login` + accepted terms).
+DATASET_ARGS=()
+if [ -n "${DATASETS:-}" ]; then
+    read -r -a _ds <<< "$DATASETS"
+    DATASET_ARGS=(--datasets "${_ds[@]}")
+fi
 
 mkdir -p "$DATA_DIR" "$RESULTS"
 
@@ -43,7 +50,7 @@ echo "=== [3/5] Full sweep ==="
 # abort the sweep; a later --resume run picks up whatever was missing.
 "$PY" scripts/run_scan.py \
     --data-dir "$DATA_DIR" --output-dir "$RESULTS" --model "$MODEL" \
-    --repeat-scan --resume --allow-missing-datasets
+    --repeat-scan --resume --allow-missing-datasets "${DATASET_ARGS[@]}"
 
 echo "=== [4/5] Stage-2 confirmation ==="
 "$PY" scripts/confirm_top.py \
