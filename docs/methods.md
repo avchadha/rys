@@ -700,6 +700,51 @@ Frame as "weak but reliable second-pass benefit in the late-middle stack;
 no LLM-scale reasoning-circuit gains," and discuss the control-band
 construction explicitly.
 
+### 12.2 DINOv3 arm completion record (2026-07-22)
+
+Full pipeline completed (~6h; one relaunch after a torchvision build
+mismatch in the arm's venv, before any results existed). Random-split
+results, all 11 datasets:
+
+- **Dramatically more duplication-tolerant than EVA overall**: whole-matrix
+  mean deltas −0.1 to −1.1pp (EVA: −3 to −10pp). Early-layer fragility
+  remains unanimous (−5 to −14pp regional means); everything from
+  mid-stack onward is ≈0.
+- **Stage-2 confirmation: 0 of 20 top configs met the pre-specified
+  criterion.** Controls: mean −0.05pp, SD 0.47pp (null band +0.88pp — tight
+  because random duplications barely hurt this model). Leading top configs
+  reproduced tiny positive deltas with CIs excluding zero (+0.5 to +0.8pp),
+  clustered at (i ≈ 13–21, j ≈ 24–31). One of 20 random controls exceeded
+  the band (expected false-positive count ≈ 0.5) — consistent with noise.
+- Several probes are at/near ceiling for DINOv3 (baselines: imagenet-100
+  0.99, spatial 0.99, inside/outside 1.00, symmetry 1.00, stanford40 0.96)
+  — upside structurally invisible there; the informative datasets were
+  counting (0.42), places365 (0.61), dtd (0.75), fgvc (0.73).
+
+**Registered-prediction scorecard (from §7.5):**
+
+1. "Early-layer duplication harmful" — ✓ confirmed, both arms, all datasets.
+2. "Duplication tolerated within the band (28–40)" — ✓ (band deltas ≈ 0.000
+   everywhere), but tolerance is NOT band-exclusive: mid-stack (13–27) is
+   equally tolerated. The anatomy band under-predicts the extent of the
+   tolerant region.
+3. "Positive effects concentrated in/near the band" — ✗: the (tiny,
+   unconfirmed) positive effects concentrate in mid-stack (13–31), largely
+   BELOW the band. Content-dominance locates tolerance imperfectly and
+   locates benefit poorly.
+
+**Cross-model summary for the paper:** RYS-style duplication gains do not
+transfer to ViT representation quality in either training regime — no
+config in either arm survives selection-robust confirmation. The
+depth-structure story is the positive contribution: (a) early layers are
+universally fragile; (b) late layers are universally immune (opposite of
+LLMs; the no-decode-phase signature, corroborated by DINOv3's content band
+running to the final layer); (c) the content band exists only without
+language supervision (objective ablation, §7.5); (d) small CI-positive
+second-pass effects exist in both models (+1–2pp EVA late-middle, +0.5–0.8pp
+DINOv3 mid) but are modest relative to what arbitrary-config luck can
+produce, per the pre-specified control-band test.
+
 ## 13. Known limitations (to state in the paper)
 
 1. Embedding-geometry probes, not behavioral ones: the original RYS scored
