@@ -630,6 +630,42 @@ Notes for interpretation:
 - Counting at 0.392 (chance 0.10) shows genuine but far-from-ceiling
   numerosity signal — the most headroom of any probe in both directions.
 
+### 12.1 EVA arm completion record (2026-07-22)
+
+Full pipeline completed without incident: 11 datasets × 1176 configs × 2
+splits (sweep), single-layer k-repeats, stage-2 confirmation, figures,
+report. Depth signature unanimous across all 11 datasets on the random
+split: early-layer duplication harmful (−3 to −16pp regional means,
+worst on DTD textures), mid-stack near-free (0 to −2pp), late-stack
+essentially free (≈0pp; mildly positive on counting +0.7pp and FGVC
++0.1pp) — consistent with the registered no-content-band prediction in its
+depth-structured form, and with the no-decode-phase hypothesis (late-layer
+immunity is the opposite of the LLM finding).
+
+**Stage-2 confirmation verdict: 0 of 20 top configs met the pre-specified
+criterion** (bootstrap CI > 0 AND Δ > control mean + 2·SD). The report
+accordingly declares no confirmed improvement. Two facts to report
+together, without post-hoc criterion changes:
+
+1. Random-config controls: mean −4.4pp, SD 5.9pp → null band +7.3pp. The
+   SD is inflated by the *harmful* left tail of random configs (early-layer
+   controls at −10 to −20pp); as a symmetric band around a negative mean it
+   is a very conservative bar for small positive effects.
+2. All 12 leading top configs nevertheless reproduced small positive deltas
+   on fresh images with 95% CIs excluding zero (+1.2 to +2.0pp, e.g.
+   (34, 41): +2.0pp CI [+1.3, +2.7]) — a selection-free replication of a
+   small real effect concentrated in the late-middle region (i ≈ 24–34,
+   j ≈ 41–48). Notably (34, 41) is a 7-layer block — the same block size as
+   the original RYS optimum on Qwen2-72B.
+
+Interpretation for the paper: no config produces improvements that are
+large relative to what an arbitrary duplication can do by luck (the
+pre-specified test), but the late-middle region shows a small, replicable
+positive effect (~+1–2pp) that is real by the paired-bootstrap standard.
+Frame as "weak but reliable second-pass benefit in the late-middle stack;
+no LLM-scale reasoning-circuit gains," and discuss the control-band
+construction explicitly.
+
 ## 13. Known limitations (to state in the paper)
 
 1. Embedding-geometry probes, not behavioral ones: the original RYS scored
