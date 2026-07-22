@@ -122,10 +122,8 @@ on small probe sets guarantees an inflated maximum (the winner's curse).
 Our protocol separates \emph{screening} from \emph{confirmation}: top
 configurations are re-evaluated on never-before-used images, with
 resampled reference sets, against the empirical distribution of
-\emph{random} configurations, under a criterion fixed before the sweep.
-Complementary controls (a boundary-balanced test split, matched
-Gaussian-noise nulls, and per-image paired bootstrap) bound every source
-of optimistic bias we could identify.
+\emph{random} configurations, under a criterion fixed before the sweep;
+complementary controls bound the remaining sources of optimistic bias.
 \item \textbf{Registered mechanistic predictions.} Before either sweep
 completed, we ran a vision analogue of the cross-lingual anatomy
 experiment of \citet{hankins2025sapirwhorf}---an $8{\times}8$
@@ -144,10 +142,10 @@ positive contribution:
 
 \begin{itemize}
 \item \textbf{Depth-structured tolerance, inverted relative to LLMs.}
-Early-layer duplication is destructive in every dataset and both models
-(regional means $-3$ to $-19\pp$); mid-stack duplication is nearly free;
-late-stack duplication is essentially undetectable ($|\Delta|<0.4\pp$),
-whereas in LLMs late-layer duplication is catastrophic.
+Early-layer duplication is destructive in every dataset and both models;
+mid-stack duplication is nearly free; late-stack duplication is
+essentially undetectable ($|\Delta|<0.4\pp$)---whereas in LLMs
+late-layer duplication is catastrophic.
 \item \textbf{The content band is an objective effect, not an
 architecture effect.} The anatomy experiment finds \emph{no}
 content-dominant layer band anywhere in \eva{}: rendering style dominates
@@ -182,9 +180,33 @@ On Qwen2-72B, the optimal seven-layer block $(45,52)$ raised the Open LLM
 Leaderboard average by $+2.61\pp$. \citet{hankins2025rysii} replicated
 the phenomenon across families, introduced single-layer $k$-fold
 repetition, and framed results as a quality/compute Pareto frontier;
-\citet{hankins2025sapirwhorf} provided the representational account. Depth
-up-scaling~\citep{kim2024solar} exploits related structure with
-subsequent fine-tuning; we study the pure inference-time intervention.
+\citet{hankins2025sapirwhorf} provided the representational account.
+
+\textbf{Depth recycling and adaptive depth.} Re-executing layers is the
+inference-time limit of a family of ideas that treat transformer depth as
+a flexible resource. Universal Transformers tie weights across
+depth---every layer is, by construction, a repetition of one
+block---and gain algorithmic generalization from
+recurrence~\citep{dehghani2019universal}; recurrent ``deep-thinking''
+networks extrapolate to harder problem instances simply by iterating a
+learned block longer~\citep{schwarzschild2021can}. Both findings supply
+the prior that made RYS plausible: extra passes through the right
+computation can help. On the deployment side, depth
+up-scaling~\citep{kim2024solar} physically duplicates layer blocks and
+then fine-tunes; CALM exits language models early when
+confident~\citep{schuster2022confident}; LayerSkip trains for early exit
+and reuses skipped depth for self-speculative
+decoding~\citep{elhoushi2024layerskip,zhang2024draft}; Mixture-of-Depths
+routes tokens past layers dynamically~\citep{raposo2024mixture}. Vision
+has analogous early-exit and adaptive-token
+architectures~\citep{huang2018multi,yin2022avit}, but all such designs
+\emph{train for} depth flexibility. What has been missing---and what this
+paper contributes---is a map of how much depth flexibility large vision
+transformers possess \emph{without any training}, measured exhaustively rather than at
+designer-chosen exit points; duplication is the mirror image of the layer
+\emph{deletion} studied by~\citet{lad2024remarkable}, probing the same
+question of where the residual stream tolerates a depth--computation
+mismatch.
 
 \textbf{Layer-level robustness and interpretability.} Networks tolerate
 substantial layer-level perturbation: stochastic depth trains CNNs with
@@ -240,6 +262,28 @@ Features are read from each model's \emph{trained output interface}: the
 post-layer-norm CLS token for \eva{}, and the final-norm CLS token for
 \dino{}---applied identically to baseline and duplicated passes, so
 deltas are attributable solely to the intervention.
+Table~\ref{tab:scale} summarizes the scale of the resulting experiment.
+
+\begin{table}[t]
+\caption{\textbf{Scale of the experiment.} Sweep evaluations =
+configurations $\times$ datasets; every evaluation scores two test splits
+and two metrics, with per-image outcomes persisted. Confirmation
+re-scores 40 configurations per model (top-20 + 20 random controls) on
+500 fresh images per dataset.}
+\label{tab:scale}
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Model & Params & $L$ & Configs & Sweep evals & $k$-repeat evals & GPU-h \\
+\midrule
+\eva{}~\citep{sun2024evaclip} & 17.5B & 48 & 1{,}176 & 12{,}936 & 1{,}056 & 27.5 \\
+\dino{}~\citep{simeoni2025dinov3} & 6.7B & 40 & 820 & 9{,}020 & 880 & 6.0 \\
+\midrule
+Total & & & 1{,}996 & 21{,}956 & 1{,}936 & 33.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Task battery}
 \label{sec:tasks}
@@ -391,13 +435,11 @@ layers 28--40.
 
 Two conclusions follow. First, \emph{the absence of a content band in
 \eva{} is attributable to language supervision, not to vision-transformer
-architecture}: architecture, stimuli, and analysis are held fixed between
-the two models. This is consistent with the observation that for a
-caption-matching objective, rendering style and background \emph{are}
-content---a caption of a white star on purple mentions the
-purple---and echoes, at the level of representational geometry, known
-appearance biases of contrastively trained
-vision models~\citep{geirhos2019imagenet}. Second, \dino{}'s band runs to
+architecture}: stimuli and analysis are held fixed between the models.
+For a caption-matching objective, rendering style and background
+\emph{are} content---a caption of a white star on purple mentions the
+purple---echoing, in representational geometry, known appearance biases
+of contrastively trained models~\citep{geirhos2019imagenet}. Second, \dino{}'s band runs to
 the final layer. In LLMs the content band closes well before the output
 because the network must re-enter token space~\citep{hankins2025sapirwhorf};
 an encoder whose output \emph{is} the embedding has nowhere to return to.
@@ -433,7 +475,7 @@ lower-right (late-start) region carrying faint positive structure.}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.62\linewidth]{figures/depth_profile.pdf}
+\includegraphics[width=0.54\linewidth]{figures/depth_profile.pdf}
 \caption{\textbf{Depth profile of duplication damage.} Mean random-split
 $\Delta$accuracy of all configurations starting at layer $i$, averaged
 over datasets, against normalized depth. Both models converge to zero
@@ -506,6 +548,43 @@ inside/outside at 99.4\% and symmetry at 99.1\%, versus 83.9\% and
 100.0\% for \eva{}; Appendix~\ref{app:tables}), but the gap persists on
 datasets with ample headroom (counting: $-0.3$ vs.\ $-5.4\pp$; DTD:
 $-0.9$ vs.\ $-5.6\pp$; FGVC: $-0.4$ vs.\ $-10.0\pp$).
+
+\subsection{Selection effects, measured}
+\label{sec:selection}
+
+\begin{figure}[t]
+\centering
+\begin{subfigure}[t]{0.435\linewidth}
+\includegraphics[width=\linewidth]{figures/eva_agg_raw.png}
+\caption{Random split (unbiased).}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.435\linewidth}
+\includegraphics[width=\linewidth]{figures/eva_agg_hard.png}
+\caption{Borderline split (selection-sensitive).}
+\end{subfigure}
+\caption{\textbf{The same interventions, two test splits} (\eva{},
+aggregated raw $\Delta$accuracy). The borderline split (right)---whose
+images were chosen by their behavior under the baseline model---paints a
+systematically rosier picture than the unbiased random split (left):
+its sweep maxima reach $+21\pp$ where the random split shows $+4\pp$.
+Every conclusion in this paper is drawn from the left panel.}
+\label{fig:hardsplit}
+\end{figure}
+
+Because the same phenomenon silently inflates any evaluation that selects
+test items by baseline behavior, we quantify it directly.
+Figure~\ref{fig:hardsplit} contrasts the two test splits on identical
+interventions: on the boundary-balanced borderline split, sweep maxima
+reach $+21\pp$ (same/different) and $+14\pp$ (EuroSAT), versus $+4\pp$
+and $+2\pp$ on the random split---and the pilot design based on
+\emph{hardest} images (discarded before any GPU experiment; baseline
+accuracy pinned near zero) is more distorted still, since on such a set
+\emph{any} perturbation regresses toward the mean. The magnitude of the
+gap is worth emphasizing: test-set selection alone manufactures effects
+five times larger than anything real in these models. Sweep-style
+studies that evaluate on ``the examples the model gets wrong'' inherit
+this artifact in full.
 
 \subsection{Stage-two confirmation: no configuration survives}
 \label{sec:confirmresults}
@@ -593,9 +672,8 @@ existed.}
 Registered prediction & Outcome \\
 \midrule
 \eva{}: no content band $\Rightarrow$ duplication broadly harmful, no
-beneficial band & \ding{51} Directionally correct (all regional means
-$\le 0$; nothing confirmed), but under-specified: the harm is strongly
-depth-structured rather than uniform \\
+beneficial band & \ding{51} Directionally correct, but under-specified:
+the harm is strongly depth-structured, not uniform \\
 \addlinespace
 \dino{}: early layers fragile & \ding{51} Confirmed, all datasets \\
 \addlinespace
@@ -634,19 +712,39 @@ language-supervised model and thin (six layers, weak gaps) even in the
 self-supervised one. Third, where a mild version of the precondition
 holds (\dino{}), we observe exactly a mild version of the LLM
 phenomenon: perfect tolerance and sub-percentage-point, CI-positive
-second-pass effects. Vision transformers may simply sit lower on the same
-curve, their single-pass objectives providing little pressure to develop
-computations that profit from re-execution.
+second-pass effects. Vision transformers may simply sit lower on the same curve: single-pass
+objectives exert little pressure to develop computations that profit from
+re-execution.
 
 \textbf{The missing decode phase.} The cleanest transferable structure is
 the inversion of late-layer behavior. In LLMs the final layers perform
 format-specific work whose duplication is catastrophic; in both our
 models late-layer duplication is free, and in \dino{} the content band
 runs to the final layer. Encoders end \emph{in} representation space.
-This has a practical corollary: inference-time depth interventions in
-vision encoders (adaptive compute, speculative shallow paths, layer
-skipping~\citep{fan2020reducing,lad2024remarkable}) can treat the late
-stack as a safe region, in sharp contrast to LLM practice.
+
+\textbf{Implications for inference-time depth interventions.} The
+duplication maps double as safety maps for the growing family of methods
+that manipulate effective depth at inference
+time~\citep{schuster2022confident,elhoushi2024layerskip,raposo2024mixture,huang2018multi,yin2022avit}.
+Three design rules follow for vision encoders. (i) \emph{The late stack
+is a safe surgical region}---the opposite of LLM guidance: layer-level
+interventions near the output cost essentially nothing here
+($|\Delta| < 0.4\pp$ across 22 dataset--model pairs), whereas LLM
+practice treats final layers as untouchable. (ii) \emph{The
+patch-adjacent stack is not}: interventions within the first
+$\sim$15\% of depth were destructive in every condition we measured, and
+the damage compounds super-linearly with repeated application in the
+language-supervised model (\S\ref{sec:krepeat}). (iii) \emph{Training
+objective modulates the budget}: a self-supervised encoder tolerated
+arbitrary mid-stack recycling---four consecutive executions of the same
+layer at a measured cost of $+0.01\pp$---suggesting substantially more
+zero-shot headroom for skipping, early exit, or iterative refinement
+than its language-supervised counterpart, whose whole-map mean cost was
+eight times larger. Because duplication (adding a redundant pass) and
+deletion (removing a pass)~\citep{lad2024remarkable} stress the same
+input-distribution match between adjacent layers, we expect---though we
+did not test---these maps to transfer approximately to skipping-style
+interventions.
 
 \textbf{Objective, not architecture.} The two arms differ only in
 checkpoint; the anatomy differs qualitatively. Language supervision, on
@@ -797,12 +895,8 @@ The random split is drawn uniformly from the remaining candidates.
 Selecting instead the \emph{most negative} margins (the original plan,
 discarded before any GPU experiments) pins baseline accuracy near zero
 and produces guaranteed-positive deltas under any perturbation. The
-empirical comparison bears this out: on the borderline split, sweep
-maxima reach $+21\pp$ (same/different) versus $+4\pp$ on the random
-split for the same model and dataset---an order-of-magnitude
-demonstration of selection sensitivity
-(the borderline-split aggregate map is shown in
-Figure~\ref{fig:hardsplit}).
+empirical comparison is quantified in the main text
+(\S\ref{sec:selection}, Figure~\ref{fig:hardsplit}).
 
 \subsection{Aggregation}
 \label{app:agg}
@@ -953,27 +1047,6 @@ control exceeding the band matches the expected $2\sigma$ false-positive}\\
 
 \section{Additional figures}
 \label{app:figures}
-
-\begin{figure}[h]
-\centering
-\begin{subfigure}[t]{0.495\linewidth}
-\includegraphics[width=\linewidth]{figures/eva_agg_raw.png}
-\caption{Random split (unbiased).}
-\end{subfigure}
-\hfill
-\begin{subfigure}[t]{0.495\linewidth}
-\includegraphics[width=\linewidth]{figures/eva_agg_hard.png}
-\caption{Borderline split (selection-sensitive).}
-\end{subfigure}
-\caption{\textbf{Selection sensitivity, demonstrated} (\eva{}, aggregated
-raw $\Delta$accuracy). The borderline split (right)---whose test images
-were selected by their behavior under the baseline model---paints a
-substantially rosier picture than the unbiased random split (left) for
-identical interventions. All conclusions in this paper are drawn from the
-random split; the pilot design based on \emph{hardest} images (not shown)
-was more distorted still.}
-\label{fig:hardsplit}
-\end{figure}
 
 \begin{figure}[h]
 \centering
