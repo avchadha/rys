@@ -630,6 +630,40 @@ Notes for interpretation:
 - Counting at 0.392 (chance 0.10) shows genuine but far-from-ceiling
   numerosity signal — the most headroom of any probe in both directions.
 
+### 7.5 DINOv3 anatomy outcome (recorded 2026-07-22, pre-sweep)
+
+**The objective ablation split cleanly.** DINOv3-7B (image-only
+self-supervision) HAS a content-dominant band; EVA-CLIP-18B (text
+supervision) does not:
+
+- CLS pooling: content > style at layers **35–40 of 40** (max gap +0.018 at
+  L39; final-layer gap +0.017 — the band extends to the network's END).
+- Mean-patch pooling: layers **28–40** (13 layers, max gap +0.015 at L36).
+
+Two conclusions registered before the DINOv3 sweep completes:
+
+1. The absence of a content band in EVA-CLIP is attributable to the
+   **training objective** (caption-matching keeps appearance information
+   dominant in representation geometry), not to vision-transformer
+   architecture per se.
+2. The DINOv3 band **runs to the final layer** — the direct signature of
+   the no-decode-phase hypothesis (§2): unlike LLMs, whose content phase
+   closes ~15 layers before the output to re-enter token space, a vision
+   encoder's content-dominant region has nowhere it needs to return to.
+   (Gap magnitudes are modest (~+0.02 centered cosine) vs the LLM results —
+   style remains strongly represented throughout.)
+
+**Registered prediction for the DINOv3 sweep:** duplication most tolerated
+(and any positive effects concentrated) within/near the band, i.e. blocks
+inside layers ~28–40; early-layer duplication harmful, as in EVA.
+
+Auxiliary Phase 1 observation (arm 2): DINOv3 baselines on the geometric
+synthetic probes are dramatically higher than EVA's (inside/outside 0.994
+vs 0.839; symmetry 0.991 vs 1.000-at-ceiling; both near ceiling for
+DINOv3) — self-supervised dense features are markedly better at these
+geometry tasks, so those probes are near-ceiling (degradation-sensitive
+only) in arm 2, and their borderline splits sit above 0.9 rather than 0.5.
+
 ### 12.1 EVA arm completion record (2026-07-22)
 
 Full pipeline completed without incident: 11 datasets × 1176 configs × 2
