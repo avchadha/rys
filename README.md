@@ -76,3 +76,13 @@ visualization/  heatmaps, Pareto, repeat curves
 results/        matrices, per-image outcomes, probe sets (generated)
 outputs/        PNGs + report.md (generated)
 ```
+
+## Paper
+
+A full write-up — *"No Free Depth: Exhaustive Layer-Duplication Scans Reveal
+Depth-Structured Robustness but No Reasoning Circuits in Large Vision
+Transformers"* — lives in [`paper/`](paper/) ([PDF](paper/paper.pdf)).
+Figures and reports for both arms are in `outputs/` (EVA-CLIP-18B) and
+`outputs-dinov3/` (DINOv3-7B); complete raw data (score matrices, per-image
+outcomes, anatomy features) is on the
+[`results-sync`](https://github.com/avchadha/rys/tree/results-sync) branch.
